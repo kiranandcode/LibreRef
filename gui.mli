@@ -51,23 +51,30 @@ module type LOGIC = sig
   (** [is_scene_dirty ()] returns true if the application's stored scene has had changes  *)
   val is_scene_dirty : unit -> bool
 
-  (** [add_files_to_scene (x,y) files] loads each file in files and
-     inserts the image at position (x,y)
-
-      Note: (x,y) are in screen coordinates not world coordinates.  *)
-  val add_files_to_scene : float * float -> string list -> unit
-
-  (** [open_scene_from_file filename] updates the application's stored
-     scene to the scene contained in the file at filename *)
-  val open_scene_from_file : string -> unit
-
   (** [current_scene_name ()] returns the filename corresponding to
      the current file if it exists. *)
   val current_scene_name : unit -> string option
 
+
+  (** [get_title ()] returns the title corresponding to the current application state *)
+  val get_title: unit -> string
+
+  (** [add_files_to_scene (x,y) files] loads each file in files and
+     inserts the image at position (x,y) and returns the list of
+     errors encountered while loading the images.
+
+      Note: (x,y) are in screen coordinates not world coordinates.  *)
+  val add_files_to_scene : float * float -> string list -> string list
+
+  (** [open_scene_from_file filename] updates the application's stored
+     scene to the scene contained in the file at filename, returning
+     the list of errors encountered while loading the scene. *)
+  val open_scene_from_file : string -> string list
+
   (** [save_scene_as filename] saves the current stored scene to the
-     file at filename *)
-  val save_scene_as : string -> unit
+     file at filename, returning the list of errors encountered while
+     loading the scene *)
+  val save_scene_as : string -> string list
 
 end
 

@@ -638,16 +638,23 @@ module Logic : Gui.LOGIC = struct
   let is_scene_dirty () = !scene.any_changes
 
   let add_files_to_scene pos images =
-    scene := fst (Scene.add_images_at pos images !scene)
+    let s', errors = (Scene.add_images_at pos images !scene) in
+    scene := s';
+    errors
 
   let open_scene_from_file file =
     match Scene.read_from_file file  with
-    | Ok (s, _) -> scene := s
-    | Error _ -> ()
+    | Ok (s, errors) -> scene := s; errors
+    | Error error -> [error]
 
   let current_scene_name () = !scene.filename
 
-  let save_scene_as filename = ignore @@ Scene.write_to_file !scene filename
+  let save_scene_as filename =
+    let s, errors = Scene.write_to_file !scene filename in
+    scene := s;
+    errors
+
+  let get_title () = Scene.generate_title !scene
 
 end
 
@@ -673,14 +680,12 @@ module BuildUI (RuntimeCtx: Gui.RUNTIME_CONTEXT) (Dialog: Gui.DIALOG) : Gui.UI =
     queue_draw ();
     true 
 
-  let on_button_release =
-    fun _m ->
+  let on_button_release = fun _m ->
     scene := Scene.mouse_released !scene;
     queue_draw ();
     true 
 
-  let on_button_press =
-    fun m ->
+  let on_button_press = fun m ->
     let x = GdkEvent.Button.x m and y = GdkEvent.Button.y m in
     let button = GdkEvent.Button.button m in
     begin match button with

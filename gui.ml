@@ -42,10 +42,11 @@ end
 module type LOGIC = sig
   val clear_scene: unit -> unit
   val is_scene_dirty: unit -> bool
-  val add_files_to_scene: float * float -> string list -> unit
-  val open_scene_from_file: string -> unit
   val current_scene_name: unit -> string option
-  val save_scene_as: string -> unit
+  val get_title: unit -> string
+  val add_files_to_scene: float * float -> string list -> string list
+  val open_scene_from_file: string -> string list
+  val save_scene_as: string -> string list
 end  
 
 module type DIALOG = sig
@@ -90,6 +91,26 @@ module Filter = struct
 end
 
 module BuildDialogs (RuntimeCTX : RUNTIME_CONTEXT)  (Logic: LOGIC) = struct
+
+  let queue_draw () =
+    GtkBase.Widget.queue_draw (GtkBaseProps.Widget.cast RuntimeCTX.d#as_widget);
+    RuntimeCTX.w#set_title (Logic.get_title ())
+
+  let show_errors = function [] -> () | errors ->
+    let message =
+      "While processing the requested action, ran into the following errors:\n\t - " ^
+      String.concat "\n\t - " errors in
+    let dialog =
+      GWindow.message_dialog
+        ~message
+        ~message_type:`ERROR
+        ~buttons:GWindow.Buttons.ok
+        ~parent:RuntimeCTX.w ~title:"Libre-Ref - Non-fatal Error"
+        ~urgency_hint:true ~icon_name:"dialog-error" () in
+    begin match dialog#run () with
+      | `OK | `DELETE_EVENT -> ()
+    end;
+    dialog#destroy ()
 
   let ask_save_file action ~do_save ~then_ =
     let dialog =
@@ -145,7 +166,7 @@ module BuildDialogs (RuntimeCTX : RUNTIME_CONTEXT)  (Logic: LOGIC) = struct
   let ask_user_for_filename_to_save_file_as ~then_:save_file_as_name =
     ask_for_libreref_filename
       "Save scene to file" `SAVE (`SAVE_AS, `SAVE)
-      ~then_:save_file_as_name
+      ~then_:(save_file_as_name)
 
   let save_current_scene ~current_filename save_file_as =
     match current_filename () with
@@ -184,25 +205,40 @@ module BuildDialogs (RuntimeCTX : RUNTIME_CONTEXT)  (Logic: LOGIC) = struct
   let handle_save_scene () =
     save_current_scene
       ~current_filename:Logic.current_scene_name
-      Logic.save_scene_as
+      (fun filename ->
+         let errors = Logic.save_scene_as filename in
+         queue_draw ();
+         show_errors errors
+      )
 
   let handle_new_scene () =
     handle_new_scene
       ~any_changes:Logic.is_scene_dirty
       ~do_save:handle_save_scene
-      Logic.clear_scene
+      (fun () -> Logic.clear_scene (); queue_draw ())
 
-  let handle_save_as () = ask_user_for_filename_to_save_file_as ~then_:Logic.save_scene_as
+  let handle_save_as () =
+    ask_user_for_filename_to_save_file_as
+      ~then_:(fun filename ->
+          let errors = Logic.save_scene_as filename in
+          queue_draw ();
+          show_errors errors)
 
   let handle_load_scene () =
     handle_load_scene
       ~any_changes:Logic.is_scene_dirty
       ~do_save:handle_save_scene
-      Logic.open_scene_from_file
+      (fun file ->
+         let errors = Logic.open_scene_from_file file in
+         queue_draw ();
+         show_errors errors)
 
   let handle_load_images button () =
     let x,y = GdkEvent.Button.x button, GdkEvent.Button.y button in
-    handle_load_images ~then_:(Logic.add_files_to_scene (x,y))
+    handle_load_images ~then_:(fun files ->
+        let errors = Logic.add_files_to_scene (x,y) files in
+        queue_draw ();
+        show_errors errors)
 
   let handle_quit_application () =
     handle_quit_application
@@ -244,21 +280,6 @@ module BuildDialogs (RuntimeCTX : RUNTIME_CONTEXT)  (Logic: LOGIC) = struct
     let button = GdkEvent.Button.button button and time = GdkEvent.Button.time button in
     menu#popup ~button ~time
 
-  let show_errors errors =
-    let message =
-      "While processing the requested action, ran into the following errors:\n\t - " ^
-      String.concat "\n\t - " errors in
-    let dialog =
-      GWindow.message_dialog
-        ~message
-        ~message_type:`ERROR
-        ~buttons:GWindow.Buttons.ok
-        ~parent:RuntimeCTX.w ~title:"Libre-Ref - Non-fatal Error"
-        ~urgency_hint:true ~icon_name:"dialog-error" () in
-    begin match dialog#run () with
-      | `OK | `DELETE_EVENT -> ()
-    end;
-    dialog#destroy ()
 
 end
 
