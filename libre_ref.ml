@@ -33,6 +33,7 @@ For more information on this, and how to apply and follow the GNU AGPL, see
 *)
 (* * Imports *)
 module E = Data_encoding.Encoding
+module G = Gui
 (* * Definitions *)
 (* ** Error handling *)
 module Error = struct
@@ -628,285 +629,86 @@ end
 
 (* * Implementation *)
 (* ** Resources *)
-let images = [ ]
+let scene = ref @@ Scene.init []
 
-let scene = ref @@ Scene.init images
+module Logic : Gui.LOGIC = struct
+
+  let clear_scene () = scene := Scene.init []
+        
+  let is_scene_dirty () = !scene.any_changes
+
+  let add_files_to_scene pos images =
+    scene := fst (Scene.add_images_at pos images !scene)
+
+  let open_scene_from_file file =
+    match Scene.read_from_file file  with
+    | Ok (s, _) -> scene := s
+    | Error _ -> ()
+
+  let current_scene_name () = !scene.filename
+
+  let save_scene_as filename = ignore @@ Scene.write_to_file !scene filename
+
+end
 
 (* ** Helpers *)
-let queue_draw w d =
-  GtkBase.Widget.queue_draw (GtkBaseProps.Widget.cast d#as_widget);
-  w#set_title (Scene.generate_title !scene)
+module BuildUI (RuntimeCtx: Gui.RUNTIME_CONTEXT) (Dialog: Gui.DIALOG) : Gui.UI = struct
 
-let draw cr _w _h =
-  Scene.draw !scene cr
+  open RuntimeCtx
 
-let expose drawing_area cr =
-  let allocation = drawing_area#misc#allocation in
-  draw cr (float allocation.Gtk.width) (float allocation.Gtk.height);
-  true
+  let queue_draw () =
+    GtkBase.Widget.queue_draw (GtkBaseProps.Widget.cast d#as_widget);
+    w#set_title (Scene.generate_title !scene)
 
-let on_move = fun _w _d m ->
+  let draw cr =
+    Scene.draw !scene cr
+
+  let expose cr =
+    draw cr;
+    true
+
+  let on_move = fun m ->
     let x = GdkEvent.Motion.x m and y = GdkEvent.Motion.y m in
     scene := Scene.mouse_motion (x,y) !scene;
-    queue_draw _w _d;
+    queue_draw ();
     true 
 
-let on_button_release =
-  fun _w _d _m ->
+  let on_button_release =
+    fun _m ->
     scene := Scene.mouse_released !scene;
-    queue_draw _w _d;
+    queue_draw ();
     true 
 
-let on_button_press show_errors show_right_click =
-  fun _w _d m ->
-  let x = GdkEvent.Button.x m and y = GdkEvent.Button.y m in
-  let button = GdkEvent.Button.button m in
-  let time = GdkEvent.Button.time m in
-  begin match button with
-    | 1 ->
-      scene := Scene.mouse_pressed (x,y) !scene;
-      queue_draw _w _d
-    | 3 ->
-      show_right_click
-        button time
-        ~new_scene:(fun () -> scene := Scene.init []; queue_draw _w _d)
-        ~any_changes:(fun () -> !scene.any_changes)
-        ~open_files:(fun filenames ->
-          let new_scene, errors = Scene.add_images_at (x,y) filenames !scene in
-          scene := new_scene;
-          begin match errors with [] -> () | _ -> show_errors errors end;
-          queue_draw _w _d
-          )
-        ~open_scene:(fun file ->
-            match Scene.read_from_file file with
-            | Error e -> show_errors [e]
-            | Ok (new_scene, []) -> scene := new_scene; queue_draw _w _d
-            | Ok (new_scene, errors) -> scene := new_scene; queue_draw _w _d; show_errors errors; 
-          )
-        ~save_scene_as:(`GEN_NAME (fun file ->
-            match Scene.write_to_file !scene file with
-            | new_scene, [] -> scene := new_scene; queue_draw _w _d
-            | new_scene, errors -> scene := new_scene; queue_draw _w _d; show_errors errors
-          ))
-        ~save_scene:(fun ~save_scene_as () ->
-            print_endline "save scene function being called" ;
-            match Option.map (Scene.write_to_file !scene) !scene.filename with
-            | None ->
-              print_endline "current scene does not have a filename - asking for user" ;
-              save_scene_as ()
-            | Some (new_scene, []) -> scene := new_scene; queue_draw _w _d
-            | Some (new_scene, errors) -> scene := new_scene; queue_draw _w _d; show_errors errors
-          )
-    (* show_right_click_menu button time *)
-    (* let menu = GtkMenu.Menu.create [ Gobject.param GtkMenu.Menu.P.tearoff_title "LibreRef" ] in
-     * let load_image = GtkMenu.MenuItem.create ~label:"Load image" () in
-     * GtkMenuProps
-     * menu#add load_image;
-     * GtkMenu.Menu.popup menu ~button ~time *)
-    | _ -> ()
-  end;
-  true
+  let on_button_press =
+    fun m ->
+    let x = GdkEvent.Button.x m and y = GdkEvent.Button.y m in
+    let button = GdkEvent.Button.button m in
+    begin match button with
+      | 1 ->
+        scene := Scene.mouse_pressed (x,y) !scene;
+        queue_draw ()
+      | 3 -> Dialog.show_right_click_menu m
+      | _ -> ()
+    end;
+    true
 
-let on_scroll = fun _w _d m ->
-  let x,y = GdkEvent.Scroll.x m, GdkEvent.Scroll.y m in
-  begin match GdkEvent.Scroll.direction m with
-    | `DOWN  ->
-      scene := Scene.zoom_around ~by:(-.0.05) (x,y) !scene;
-      queue_draw _w _d
-    | `UP ->
-      scene := Scene.zoom_around ~by:(0.05) (x,y) !scene;
-      queue_draw _w _d
-    |`SMOOTH |`LEFT |`RIGHT -> ()
-  end;
-  true
+  let on_scroll = fun m ->
+    let x,y = GdkEvent.Scroll.x m, GdkEvent.Scroll.y m in
+    begin match GdkEvent.Scroll.direction m with
+      | `DOWN  ->
+        scene := Scene.zoom_around ~by:(-.0.05) (x,y) !scene;
+        queue_draw ()
+      | `UP ->
+        scene := Scene.zoom_around ~by:(0.05) (x,y) !scene;
+        queue_draw ()
+      |`SMOOTH |`LEFT |`RIGHT -> ()
+    end;
+    true
 
-  
+end
 
 (* ** Main loop *)
-let () =
-  let _ = GMain.init () in
-  let w = GWindow.window ~resizable:true ~title:"Libre-ref" ~width:1500 ~height:1500 () in
-  let d = GMisc.drawing_area ~packing:w#add () in
 
-  let is_prefix s1 s2 =
-    let l1 = String.length s1 and l2 = String.length s2 in
-    l1 <= l2 && s1 = String.sub s2 0 l1 in
+module Gui = Gui.Make (Logic) (BuildUI)
 
-  let all_file_filter () =
-    let f = GFile.filter ~name:"All" () in
-    f#add_pattern "*" ;
-    f in
-
-  let scene_file_filter () =
-    let f = GFile.filter ~name:"Scene files" () in
-    f#add_pattern "*.libreref" ;
-    f in
-  let image_filter () =
-    let f = GFile.filter ~name:"Images" () in
-    f#add_custom [ `MIME_TYPE ]
-      ~callback:(fun info ->
-          let mime = List.assoc `MIME_TYPE info in
-          is_prefix "image/" mime);
-    f in
-
-  let ask_save_file action ~on_save =
-    let dialog =
-      let buttons = GWindow.Buttons.yes_no in
-      let message =
-        Printf.sprintf 
-          "There are unsaved changes in the current scene. Save current scene before %s?" action in
-      let title = "Save modifications to file?" in
-      GWindow.message_dialog
-        ~buttons ~message ~title
-        ~message_type:`QUESTION
-        ~type_hint:`DIALOG () in
-    let result = match dialog#run () with
-      | `DELETE_EVENT |`NO -> false
-      | `YES -> true in
-    dialog#destroy ();
-    if result
-    then on_save ()
-    else () in
-
-
-  let ask_for_image_file callback () =
-    let dialog = GWindow.file_chooser_dialog
-        ~action:`OPEN
-        ~title:"Open image file"
-        ~parent:w () in
-    dialog#add_button_stock `CANCEL `CANCEL;
-    dialog#add_select_button_stock `OPEN `OPEN;
-    dialog#set_select_multiple true;
-    dialog#add_filter (image_filter ());
-    dialog#add_filter (all_file_filter ());
-    let filenames = match dialog#run () with
-      | `OPEN -> dialog#get_filenames
-      | `DELETE_EVENT | `CANCEL -> [] in
-    dialog#destroy ();
-    callback filenames in
-
-  let rec ask_for_scene_file ?(save=false) ~any_changes ~on_save callback () =
-    if not save && any_changes () then begin
-      ask_save_file "opening a new scene" ~on_save:(fun () ->
-          ask_for_scene_file ~save:true ~any_changes ~on_save `AUTO ()
-        )
-    end;
-    match callback with
-    | `AUTO -> on_save ()
-    | `GEN_NAME callback ->
-      let dialog = GWindow.file_chooser_dialog
-          ~action:(if save then `SAVE else `OPEN)
-          ~title:(if save then "Save scene to file" else "Open scene from file")
-          ~parent:w () in
-      dialog#add_button_stock `CANCEL `CANCEL;
-      if save
-      then dialog#add_select_button_stock `SAVE_AS `SAVE
-      else dialog#add_select_button_stock `OPEN `OPEN;
-      dialog#set_select_multiple false;
-      dialog#add_filter (scene_file_filter ());
-      dialog#add_filter (all_file_filter ());
-      let filename = match dialog#run () with
-        | `OPEN -> dialog#filename
-        | `SAVE -> dialog#filename
-        | `DELETE_EVENT | `CANCEL -> None in
-      dialog#destroy ();
-      Option.iter callback filename in
-
-  let handle_quit_application ~any_changes ~on_save () =
-    if any_changes () then begin
-      ask_save_file "quitting" ~on_save:(fun () ->
-          ask_for_scene_file ~save:true ~any_changes ~on_save `AUTO ()
-        )
-    end;
-    (* todo: handle unsaved work *)
-    GMain.quit () in
-
-  let handle_new_scene ~any_changes ~on_save new_scene () =
-    if any_changes () then begin
-      ask_save_file "creating a new scene" ~on_save:(fun () ->
-          ask_for_scene_file ~save:true ~any_changes ~on_save `AUTO ()
-        )
-    end;
-    new_scene () in
-
-  let show_right_click_menu button time
-      ~new_scene
-      ~any_changes ~(open_files: string list -> unit) ~open_scene ~save_scene_as ~save_scene  =
-    let menu = GMenu.menu () in
-    let rec save_scene_callback () = 
-      save_scene
-        ~save_scene_as:( fun () ->
-            ask_for_scene_file ~any_changes ~save:true ~on_save:save_scene_callback save_scene_as ()
-          ) () in
-
-    let new_scene_w = GMenu.menu_item ~label:"New scene" () in
-    menu#add new_scene_w;
-    ignore @@ new_scene_w#connect#activate ~callback:(
-      handle_new_scene ~any_changes ~on_save:save_scene_callback  new_scene
-    );
-
-
-    let save_scene_w = GMenu.menu_item ~label:"Save scene" () in
-    menu#add save_scene_w;
-    ignore @@ save_scene_w#connect#activate ~callback:(
-      save_scene_callback
-    );
-
-
-    let save_scene_w = GMenu.menu_item ~label:"Save scene as" () in
-    menu#add save_scene_w;
-    ignore @@ save_scene_w#connect#activate
-      ~callback:(ask_for_scene_file ~any_changes ~save:true ~on_save:save_scene_callback save_scene_as);
-
-    let open_scene_w = GMenu.menu_item ~label:"Load scene" () in
-    menu#add open_scene_w;
-    ignore @@ open_scene_w#connect#activate
-      ~callback:(ask_for_scene_file ~any_changes ~on_save:save_scene_callback (`GEN_NAME open_scene));
-
-    let load_image = GMenu.menu_item ~label:"Open image(s)" () in
-    menu#add load_image;
-    ignore @@ load_image#connect#activate
-      ~callback:(ask_for_image_file open_files);
-
-    let quit_application = GMenu.menu_item ~label:"Quit LibreRef" () in
-    menu#add quit_application;
-    ignore @@ quit_application#connect#activate
-      ~callback:(handle_quit_application ~on_save:save_scene_callback ~any_changes);
-
-    menu#popup ~button ~time in
-
-  let show_errors errors =
-    let message =
-      "While processing the requested action, ran into the following errors:\n\t - " ^
-      String.concat "\n\t - " errors in
-    let dialog =
-      GWindow.message_dialog
-        ~message
-        ~message_type:`ERROR
-        ~buttons:GWindow.Buttons.ok
-        ~parent:w ~title:"Libre-Ref - Non-fatal Error"
-        ~urgency_hint:true ~icon_name:"dialog-error" () in
-    begin match dialog#run () with
-      | `OK | `DELETE_EVENT -> ()
-    end;
-    dialog#destroy ()
-  in
-
-  w#set_title "Libre ref";
-  w#event#add [ `SCROLL ; `BUTTON1_MOTION; `BUTTON3_MOTION; `BUTTON_PRESS ; `BUTTON_RELEASE  ];
-
-
-  ignore @@ d#misc#connect#draw ~callback:(expose d);
-
-  ignore @@ w#event#connect#motion_notify ~callback:(on_move w d);
-  ignore @@ w#event#connect#button_release ~callback:(on_button_release w d);
-  ignore @@ w#event#connect#button_press ~callback:(on_button_press show_errors show_right_click_menu  w d);
-  ignore @@ (w#event#connect#scroll ~callback:(on_scroll w d));
-  (* ignore @@ (w#event#connect#key_press ~callback:on_key_press); *)
-  ignore(w#connect#destroy ~callback:GMain.quit);
-
-
-  w#show();
-  GMain.main()
-
-
+let () = Gui.main ()
