@@ -201,15 +201,13 @@ module BuildDialogs (RuntimeCTX : RUNTIME_CONTEXT)  (Logic: LOGIC) = struct
       ~any_changes ~do_save
       ~then_:new_scene
 
-
   let handle_save_scene () =
     save_current_scene
       ~current_filename:Logic.current_scene_name
       (fun filename ->
          let errors = Logic.save_scene_as filename in
          queue_draw ();
-         show_errors errors
-      )
+         show_errors errors)
 
   let handle_new_scene () =
     handle_new_scene
@@ -245,6 +243,33 @@ module BuildDialogs (RuntimeCTX : RUNTIME_CONTEXT)  (Logic: LOGIC) = struct
       ~any_changes:Logic.is_scene_dirty
       ~do_save:handle_save_scene
 
+  let handle_settings () =
+    let window = GWindow.window
+        ~type_hint:`UTILITY
+        ~decorated:true ~deletable:true
+        ~kind:`TOPLEVEL
+        ~border_width:10
+        ~title:"LibreRef Settings"
+        () in
+    let notebook = GPack.notebook ~packing:window#add () in
+    let button =
+      GButton.button ~label:"Page 1" ~packing:(fun w -> ignore (notebook#append_page w)) () in
+    ignore @@ button#connect#clicked ~callback:
+      (fun () -> prerr_endline "Hello again - cool button 1 was pressed");
+
+    let button = GButton.button ~label:"Page 2" 
+        ~packing:(fun w -> ignore (notebook#append_page w))
+        () in
+    ignore @@ button#connect#clicked ~callback:
+      (fun () -> prerr_endline "Hello again - cool button 2 was pressed");
+    ignore @@ notebook#connect#switch_page 
+      ~callback:(fun i -> prerr_endline ("Page switch to " ^ string_of_int i));
+    ignore @@ button#connect#clicked ~callback:
+      (fun () -> prerr_endline "Coucou");
+
+    window#show ();
+    ()
+
   let show_right_click_menu button =
     let menu = GMenu.menu () in
     let new_scene_w = GMenu.menu_item ~label:"New scene" () in
@@ -272,10 +297,16 @@ module BuildDialogs (RuntimeCTX : RUNTIME_CONTEXT)  (Logic: LOGIC) = struct
     ignore @@ load_image#connect#activate
       ~callback:(handle_load_images button);
 
+    let settings = GMenu.menu_item ~label:"Configure LibreRef" () in
+    menu#add settings;
+    ignore @@ settings#connect#activate
+      ~callback:handle_settings;
+
     let quit_application = GMenu.menu_item ~label:"Quit LibreRef" () in
     menu#add quit_application;
     ignore @@ quit_application#connect#activate
       ~callback:handle_quit_application;
+
 
     let button = GdkEvent.Button.button button and time = GdkEvent.Button.time button in
     menu#popup ~button ~time

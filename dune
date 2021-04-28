@@ -2,3 +2,4 @@
  (name libre_ref)
  (libraries cmdliner data-encoding lablgtk3 stb_image)
  (ocamlopt_flags "-g"))
+(documentation)
