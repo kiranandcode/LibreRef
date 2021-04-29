@@ -39,6 +39,25 @@ module type RUNTIME_CONTEXT = sig
   val d: GMisc.drawing_area
 end
 
+module type CONFIG = sig
+
+  val get_outline_colour: unit -> (int * int * int)
+  val set_outline_colour:  (int * int * int) -> unit
+
+  val get_background_colour: unit -> (int * int * int)
+  val set_background_colour:  (int * int * int) -> unit
+
+  val get_min_zoom: unit -> float
+  val set_min_zoom: float -> unit
+
+  val get_max_zoom: unit -> float
+  val set_max_zoom: float -> unit
+
+  val get_embed_images: unit -> bool
+  val set_embed_images: bool -> unit
+
+end
+
 module type LOGIC = sig
   val clear_scene: unit -> unit
   val is_scene_dirty: unit -> bool
@@ -62,8 +81,14 @@ module type UI = sig
   val on_button_press: GdkEvent.Button.t -> bool
   val on_scroll: GdkEvent.Scroll.t -> bool
 end
+(* ** Constants *)
+let settings_title_padding = 10
+let settings_option_label_width = 200
+let settings_option_label_padding = 10
+let settings_option_value_padding = 20
 
 (* ** Implementations *)
+(* *** Utils *)
 module Filter = struct
 
   let is_prefix s1 s2 =
@@ -89,9 +114,166 @@ module Filter = struct
     f
 
 end
+(* *** Settings *)
+module BuildSettings (RuntimeCTX: RUNTIME_CONTEXT) (Config: CONFIG) = struct
+  let handle_settings ~queue_draw () =
+    let window = GWindow.window
+        ~width:50
+        ~height:200
+        ~type_hint:`UTILITY
+        ~decorated:true ~deletable:true
+        ~kind:`TOPLEVEL
+        ~border_width:10
+        ~title:"LibreRef Settings"
+        () in
+    let make_label txt = 
+      let label = GMisc.label ~text:txt () in
+      label#coerce in
+    let notebook = GPack.notebook ~width:500 ~height:800 ~packing:window#add () in
+    let add_page txt w = 
+      ignore (notebook#append_page ~tab_label:(make_label txt) w) in
+    let pack_tight ?padding pane w =
+      GtkPack.Box.(pack (cast pane#as_widget))
+        ~expand:false
+        ~fill:true ?padding
+        w#as_widget in
+    let pack_loose ?padding pane w =
+      GtkPack.Box.(pack (cast pane#as_widget))
+        ~expand:true
+        ~fill:true ?padding
+        w#as_widget in
+    let _theming_panel =
+      let get_color cb = 
+        let color =  cb#color in
+        Gdk.Color.(red color, green color, blue color) in
+      let to_color (r,g,b) = Gdk.Color.color_parse (Printf.sprintf "#%04X%04X%04X" r g b) in
+      let pane =
+        GPack.box ~homogeneous:false ~spacing:10 ~packing:(add_page "Themeing") `VERTICAL () in
+      ignore @@ (GMisc.label
+                   ~ypad:settings_title_padding
+                   ~packing:(pack_tight pane)
+                   ~justify:`LEFT ~markup:"<b>Canvas colours</b>" ());
 
-module BuildDialogs (RuntimeCTX : RUNTIME_CONTEXT)  (Logic: LOGIC) = struct
+      ignore @@ (
+        let panel = GPack.box ~packing:(pack_tight pane) `HORIZONTAL () in
+        ignore
+          (GMisc.label ~width:settings_option_label_width  ~justify:`LEFT
+             ~packing:(pack_tight ~padding:settings_option_label_padding panel)
+             ~text:"Background colour" ());
+        let cb = 
+          (GButton.color_button ~color:(Config.get_background_colour () |> to_color)
+             ~packing:(pack_loose ~padding:settings_option_value_padding panel)
+             ~title:"Background colour" ()) in
+        ignore @@
+        cb#connect#color_set ~callback:(fun () ->
+            Config.set_background_colour (get_color cb);
+            queue_draw ()
+          );
+        ());
 
+      ignore @@ (
+        let panel = GPack.box ~packing:(pack_tight pane) `HORIZONTAL () in
+        ignore
+          (GMisc.label ~width:settings_option_label_width ~justify:`LEFT
+             ~packing:(pack_tight ~padding:settings_option_label_padding panel)
+             ~text:"Outline colour" ());
+        let cb = 
+          (GButton.color_button
+             ~color:(Config.get_outline_colour () |> to_color)
+             ~packing:(pack_loose ~padding:settings_option_value_padding panel)
+             ~title:"Outline colour" ()) in
+        ignore @@ cb#connect#color_set ~callback:(fun () ->
+            Config.set_outline_colour (get_color cb);
+            queue_draw ()            
+          );
+      );
+      pane in
+
+    let _theming_panel =
+      let range_between ?value lower upper =
+        GData.adjustment ~step_incr:0.01 ~page_incr:0.01 ~page_size:0.001 ?value ~lower ~upper  () in
+      let pane = GPack.box ~packing:(add_page "Controls") `VERTICAL () in
+      ignore ((GMisc.label
+                 ~ypad:settings_title_padding
+                 ~packing:(pack_tight pane)
+                 ~justify:`LEFT ~markup:"<b>Canvas Controls</b>" ())#coerce);
+
+      let max_stepper = ref None in
+      let min_stepper = ref None in
+      let set_max_stepper_lower upper = match !max_stepper with None -> () | Some _sc ->
+        _sc#adjustment#set_lower upper in
+      let set_min_stepper_upper lower = match !min_stepper with None -> () | Some _sc ->
+        _sc#adjustment#set_upper lower in
+
+      ignore @@ (
+        let panel = GPack.box ~packing:(pack_tight pane) `HORIZONTAL () in
+        ignore (GMisc.label ~width:settings_option_label_width
+                  ~packing:(pack_tight ~padding:settings_option_label_padding panel)
+                  ~text:"Minimum Zoom Factor" ());
+        let min_vl = (Config.get_min_zoom ()) in
+        let sc = (GRange.scale
+                    ~digits:4
+                    (*  ~show:true
+                     *  ~digits:5
+                     * ~upper_stepper_sensitivity:`OFF
+                     * ~lower_stepper_sensitivity:`OFF
+                     * ~show_fill_level:true
+                     * ~restrict_to_fill_level:false *)
+                    ~packing:(pack_loose ~padding:settings_option_value_padding panel)
+                    ~adjustment:(range_between ~value:min_vl 0.05 5.0)
+                    `HORIZONTAL ()) in
+        sc#adjustment#set_value min_vl;
+        min_stepper := Some sc;
+        ignore @@ sc#connect#value_changed ~callback:(fun () ->
+            Config.set_min_zoom sc#adjustment#value;
+            set_max_stepper_lower sc#adjustment#value;
+          );
+        panel
+      );
+      ignore (
+        let panel = GPack.box ~packing:(pack_tight pane) `HORIZONTAL () in
+        ignore (GMisc.label ~width:settings_option_label_width
+                     ~packing:(pack_tight ~padding:settings_option_label_padding panel)
+                     ~text:"Maximum Zoom Factor" ());
+        let max_vl = (Config.get_max_zoom ()) in
+        let sc = (GRange.scale
+                    ~digits:4
+                  ~packing:(pack_loose ~padding:settings_option_value_padding panel)
+                  ~adjustment:(range_between ~value:max_vl 0.05 5.0)
+                  `HORIZONTAL ()) in
+        sc#adjustment#set_value max_vl;
+        max_stepper := Some sc;
+        ignore @@ sc#connect#change_value ~callback:(fun _ vl ->
+            Config.set_max_zoom vl;
+            set_min_stepper_upper sc#adjustment#value;
+          );
+        panel);
+      pane in
+
+    let _configuration_panel =
+      let pane = GPack.box ~packing:(add_page "Configuration") `VERTICAL () in
+      ignore ((GMisc.label
+                 ~ypad:settings_title_padding
+                 ~packing:(pack_tight pane)
+                 ~justify:`LEFT ~markup:"<b>Image Referencing</b>" ()));
+
+      let cb =  ((
+          GButton.check_button ~active:(Config.get_embed_images ())
+            ~packing:(pack_tight pane)
+            ~label:"Embed images selected using the filepicker" ())) in
+      ignore @@ cb#connect#toggled ~callback:(fun () ->
+          Config.set_embed_images cb#active
+        );
+      pane in
+
+    window#show ();
+    ()
+end
+
+(* *** Dialogs  *)
+module BuildDialogs (RuntimeCTX : RUNTIME_CONTEXT)  (Logic: LOGIC) (Config: CONFIG) = struct
+  module SettingsPanel = BuildSettings (RuntimeCTX) (Config)
+(* **** Helpers  *)
   let queue_draw () =
     GtkBase.Widget.queue_draw (GtkBaseProps.Widget.cast RuntimeCTX.d#as_widget);
     RuntimeCTX.w#set_title (Logic.get_title ())
@@ -179,6 +361,7 @@ module BuildDialogs (RuntimeCTX : RUNTIME_CONTEXT)  (Logic: LOGIC) = struct
     then ask_save_file query ~do_save ~then_
     else then_ ()
 
+(* **** Handlers *)
   let handle_load_images ~then_ =
     ask_for_image_file then_
 
@@ -243,33 +426,8 @@ module BuildDialogs (RuntimeCTX : RUNTIME_CONTEXT)  (Logic: LOGIC) = struct
       ~any_changes:Logic.is_scene_dirty
       ~do_save:handle_save_scene
 
-  let handle_settings () =
-    let window = GWindow.window
-        ~type_hint:`UTILITY
-        ~decorated:true ~deletable:true
-        ~kind:`TOPLEVEL
-        ~border_width:10
-        ~title:"LibreRef Settings"
-        () in
-    let notebook = GPack.notebook ~packing:window#add () in
-    let button =
-      GButton.button ~label:"Page 1" ~packing:(fun w -> ignore (notebook#append_page w)) () in
-    ignore @@ button#connect#clicked ~callback:
-      (fun () -> prerr_endline "Hello again - cool button 1 was pressed");
 
-    let button = GButton.button ~label:"Page 2" 
-        ~packing:(fun w -> ignore (notebook#append_page w))
-        () in
-    ignore @@ button#connect#clicked ~callback:
-      (fun () -> prerr_endline "Hello again - cool button 2 was pressed");
-    ignore @@ notebook#connect#switch_page 
-      ~callback:(fun i -> prerr_endline ("Page switch to " ^ string_of_int i));
-    ignore @@ button#connect#clicked ~callback:
-      (fun () -> prerr_endline "Coucou");
-
-    window#show ();
-    ()
-
+(* **** Right click *)
   let show_right_click_menu button =
     let menu = GMenu.menu () in
     let new_scene_w = GMenu.menu_item ~label:"New scene" () in
@@ -300,7 +458,7 @@ module BuildDialogs (RuntimeCTX : RUNTIME_CONTEXT)  (Logic: LOGIC) = struct
     let settings = GMenu.menu_item ~label:"Configure LibreRef" () in
     menu#add settings;
     ignore @@ settings#connect#activate
-      ~callback:handle_settings;
+      ~callback:(SettingsPanel.handle_settings ~queue_draw);
 
     let quit_application = GMenu.menu_item ~label:"Quit LibreRef" () in
     menu#add quit_application;
@@ -314,8 +472,13 @@ module BuildDialogs (RuntimeCTX : RUNTIME_CONTEXT)  (Logic: LOGIC) = struct
 
 end
 
+(* *** Main UI  *)
 
-module Make (Logic: LOGIC) (BuildUI: functor (R: RUNTIME_CONTEXT) (D: DIALOG) -> UI) = struct 
+module Make
+    (Logic: LOGIC)
+    (Config: CONFIG)
+    (BuildUI: functor (R: RUNTIME_CONTEXT) (D: DIALOG) -> UI) =
+struct 
   let main () =
     let _ = GMain.init () in
     let w = GWindow.window ~resizable:true ~title:"Libre-ref" ~width:1500 ~height:1500 () in
@@ -325,7 +488,7 @@ module Make (Logic: LOGIC) (BuildUI: functor (R: RUNTIME_CONTEXT) (D: DIALOG) ->
       let w = w
       let d = d
     end in
-    let module Dialogs = BuildDialogs (RuntimeCTX) (Logic) in
+    let module Dialogs = BuildDialogs (RuntimeCTX) (Logic) (Config) in
 
     let module UI = BuildUI (RuntimeCTX) (Dialogs) in
 

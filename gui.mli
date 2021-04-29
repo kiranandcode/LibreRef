@@ -42,6 +42,42 @@ module type RUNTIME_CONTEXT = sig
 
 end
 
+(** CONFIG captures the interface with configuration parameters of LibreRef *)
+module type CONFIG = sig
+
+  (** retrieve the color used to draw outlines *)
+  val get_outline_colour: unit -> (int * int * int)
+
+  (** set the color used to draw outlines *)
+  val set_outline_colour:  (int * int * int) -> unit
+
+  (** get the color used to draw the background *)
+  val get_background_colour: unit -> (int * int * int)
+
+  (** set the color used to draw the background *)
+  val set_background_colour:  (int * int * int) -> unit
+
+  (** get the minimum zoom factor *)
+  val get_min_zoom: unit -> float
+
+  (** set the minimum zoom factor *)
+  val set_min_zoom: float -> unit
+
+  (** get the maximum zoom factor *)
+  val get_max_zoom: unit -> float
+
+  (** set the maximum zoom factor *)
+  val set_max_zoom: float -> unit
+
+  (** get whether images are embedded by default *)
+  val get_embed_images: unit -> bool
+
+  (** set whether images are embedded by default *)
+  val set_embed_images: bool -> unit
+
+end
+
+
 (** LOGIC captures the interface between the UI and the Logic of the application *)
 module type LOGIC = sig
 
@@ -113,6 +149,7 @@ end
 
 module Make : functor
   (Logic : LOGIC)
+  (Config: CONFIG)
   (BuildUI : functor (R : RUNTIME_CONTEXT) (D : DIALOG) -> UI) -> sig
 
   (** Run the libreref GUI *)

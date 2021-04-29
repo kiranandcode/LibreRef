@@ -1,0 +1,260 @@
+(* * License *)
+(*
+    LibreRef is a free as in freedom digital referencing tool for artists.
+    Copyright (C) <2021>  <Kiran Gopinathan>
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Also add information on how to contact you by electronic and paper mail.
+
+  If your software can interact with users remotely through a computer
+network, you should also make sure that it provides a way for users to
+get its source.  For example, if your program is a web application, its
+interface could display a "Source" link that leads users to an archive
+of the code.  There are many ways you could offer source, and different
+solutions will be better for different programs; see section 13 for the
+specific requirements.
+
+  You should also get your employer (if you work as a programmer) or school,
+if any, to sign a "copyright disclaimer" for the program, if necessary.
+For more information on this, and how to apply and follow the GNU AGPL, see
+<https://www.gnu.org/licenses/>.
+*)
+(* * Helpers *)
+let set_source_rgbi cr (r,g,b) =
+  Cairo.set_source_rgb cr (r) (g) (b)
+
+(* * Implementation *)
+let selector_radius = 10.
+let selector_line_width = 5.
+let image_default_spacing = 50.0
+
+type t =
+  | Image of {
+      data: Cairo.Surface.t;
+      position: (float * float);
+      scale: float;
+      width: float; height: float;
+      file_ref: [`Embedded | `File of string];
+    }
+
+let move_by dx dy = function
+  | Image { data; position; scale; width; height; file_ref; } ->
+    Image {
+      data; position= (fst position -. dx, snd position -. dy);
+      scale; width; height; file_ref;
+    }      
+
+let anchor = function
+  | Image {position=(px,py); scale; width; height; _} ->
+    let w, h = width *. scale, height *. scale in
+    function
+    | `NW -> px +. w, py +. h
+    | `NE -> px, py +. h
+    | `SE -> px, py
+    | `SW -> px +. w, py
+
+let scale_using_corner ?anchor ~corner (x,y) : t -> t =
+  function
+  | Image {position=(px,py); width; height; scale; data; file_ref } ->
+    let ax,ay = match anchor with Some p -> p | None ->
+      let w, h = width *. scale, height *. scale in
+      let ax,ay = match corner with
+        | `NW -> px +. w, py +. h
+        | `NE -> px, py +. h
+        | `SE -> px, py
+        | `SW -> px +. w, py in
+      ax, ay in
+    let nw, nh = Float.abs (ax -. x), Float.abs (ay -. y) in
+    let wr, hr = nw /. width, nh /. height in
+    let new_scale = Float.max wr hr in
+    let nw, nh = new_scale *. width, new_scale *. height in
+    let position = match corner with
+      | `NW -> ax -. nw, ay -. nh
+      | `NE -> px, ay -. nh
+      | `SE -> px, py
+      | `SW -> ax -. nw, py 
+    in
+    Image {position; width; height; scale=new_scale; data; file_ref}
+
+
+let draw cr = function
+  | Image {data; position=(x,y); scale; width=w; height=h; _} ->
+    let x,y = x/.scale, y /. scale in
+    Cairo.scale cr scale scale;
+    Cairo.set_source_surface cr data ~x ~y;
+    Cairo.rectangle cr x y ~w  ~h;
+    Cairo.fill cr; 
+    Cairo.scale cr (1./.scale) (1./.scale)      
+
+let draw_selected cr = function
+  | Image {data; position=(x,y); scale; width=w; height=h; _} ->
+    let x,y = x/.scale, y /. scale in
+    Cairo.scale cr scale scale;
+    Cairo.set_source_surface cr data ~x ~y;
+    Cairo.rectangle cr x y ~w  ~h;
+    Cairo.fill cr;
+    Cairo.rectangle cr x y ~w  ~h;
+    set_source_rgbi cr !Config.outline_color;
+    (* Cairo.set_source_rgb cr 0. 0.75 0.6; *)
+    Cairo.set_line_width cr (selector_line_width/.scale);
+    Cairo.stroke cr;
+    let circle (x,y) =
+      Cairo.arc cr ~r:(selector_radius /. scale)  ~a1:0.0 ~a2:(2. *. Float.pi) x y in
+    circle (x,y);
+    Cairo.Path.sub cr;
+    circle (x +. w,y);
+    Cairo.Path.sub cr;
+    circle (x +. w,y +. h);
+    Cairo.Path.sub cr;
+    circle (x,y +. h);
+    Cairo.fill cr;
+    Cairo.scale cr (1./.scale) (1./.scale)
+
+let is_suffix ~suffix str =
+  let sfl = String.length suffix in
+  let l = String.length str in
+  sfl <= l && String.equal suffix (String.sub str (l - sfl) sfl)
+
+let load_from_file ?at ?(scale=1.0) filename =
+  let (let+) x f = Result.bind x f in
+  let+ data =
+    match () with
+    | () when is_suffix ~suffix:".png" filename  ->
+      Error.wrapping_exceptions (fun () -> Cairo.PNG.create filename)
+    | () when is_suffix ~suffix:".ps" filename  ->
+      Error.wrapping_exceptions (fun () -> Cairo.PS.create filename ~w:100.0 ~h:100.0)
+    | () when is_suffix ~suffix:".pdf" filename  ->
+      Error.wrapping_exceptions (fun () -> Cairo.PDF.create filename  ~w:100.0 ~h:100.0)
+    | ()  ->
+      begin match Stb_image.load filename with
+        | Ok image ->
+          Error.wrapping_exceptions (fun () ->
+              let pad_image_data ?default from to_ data =
+                let open Bigarray in
+                let old_data_byte_size = Array1.dim data in
+                let old_array_size = old_data_byte_size / from in
+                let new_array_byte_size = old_array_size * to_ in
+                let new_data = Array1.create int8_unsigned c_layout new_array_byte_size in
+                let new_pos = ref 0 in
+                let old_pos = ref 0 in
+                for _ = 1 to old_array_size do
+                  let fv = data.{!old_pos} in
+                  for offset = 0 to from - 1 do
+                    new_data.{!new_pos + offset} <- data.{!old_pos + from - offset - 1};
+                  done;
+                  for _ = 0 to from - 1 do
+                    incr new_pos; incr old_pos
+                  done;
+                  begin match default with
+                    | None ->
+                      for _ = 1 to to_ - from do
+                        new_data.{!new_pos} <- fv;
+                        incr new_pos
+                      done
+                    | Some deflt ->
+                      for _ = 1 to to_ - from do
+                        new_data.{!new_pos} <- deflt;
+                        incr new_pos
+                      done
+                  end;
+                done;
+                new_data in
+              let w = Stb_image.width image and h = Stb_image.height image in
+              let channels = Stb_image.channels image in
+              let data = match channels with
+                | 4 -> Stb_image.data image
+                | n when n > 0 && n <= 3 ->
+                  pad_image_data n 4 (Stb_image.data image)
+                | n  ->
+                  invalid_arg (
+                    Printf.sprintf "image %s has an unsupported number of channels %d" filename n
+                  ) in
+              let format = match channels with 4 -> Cairo.Image.ARGB32 | _ -> Cairo.Image.RGB24 in
+              let img = Cairo.Image.create_for_data8 ~stride:(w * 4) data format ~w ~h in
+              img
+            )
+        | Error `Msg error ->
+          Error error
+      end
+      (* Error.wrapping_exceptions (fun () -> Cairo.PNG.create filename) *)
+      (* | _ -> Error (Printf.sprintf "Unsupported image type %s" filename) *) in
+  let position = match at with Some v -> v | None -> (0., 0.) in
+  let width,height = Float.of_int @@ Cairo.Image.get_width data,
+                     Float.of_int @@ Cairo.Image.get_height data in
+  Ok (Image {data; position; scale; width; height; file_ref=(
+      if !Config.embed_images then `Embedded else `File filename
+    )})
+
+let load_from_data ?at ?(scale=1.0) data w h alpha =
+  let data = Cairo.Image.create_for_data32 ~w ~h ~alpha data in
+  let position = match at with Some v -> v | None -> (0., 0.) in
+  let width,height = Float.of_int @@ Cairo.Image.get_width data,
+                     Float.of_int @@ Cairo.Image.get_height data in
+  Image {data; position; scale; width; height; file_ref=`Embedded}
+
+let from_serialized (serialised: Serialized.Image.t) =
+  match serialised.data with
+  | Serialized.Image.Linked file ->
+    load_from_file ~at:serialised.position ~scale:serialised.scale file
+  | Serialized.Image.Embedded { data; w; h; alpha } -> 
+    Error.wrapping_exceptions (fun () -> load_from_data data w h alpha)
+
+let to_serialized = function
+  | Image {data; position; scale; file_ref=`Embedded; _} ->
+    Serialized.Image.{
+      position; scale;
+      data=Embedded {
+          data=Cairo.Image.get_data32 data;
+          w=Cairo.Image.get_width data;
+          h=Cairo.Image.get_height data;
+          alpha = match Cairo.Image.get_format data with
+            | Cairo.Image.ARGB32 -> true
+            | Cairo.Image.RGB24 -> false
+            | Cairo.Image.A8 -> false
+            | Cairo.Image.A1 -> false
+        }
+    }
+  | Image { position; scale; file_ref=`File filename; _} ->
+    Serialized.Image.{
+      position; scale;
+      data=Linked filename
+    }
+
+let contains (x,y) = function
+  | Image {position=(px,py); width; height; scale; _ } ->
+    let w,h = width *. scale, height *. scale in
+    (px <= x && x <= px +. w) &&
+    (py <= y && y <= py +. h)
+
+let on_corner (x,y) = function
+  | Image {position=(px,py); width; height; scale; _ } ->
+    let within_circle (px,py) = (px -. x) ** 2. +. (py -. y) ** 2. <= selector_radius ** 2. in
+    let w,h = width *. scale, height *. scale in
+    match () with
+    | () when within_circle (px,py) -> Some `NW
+    | () when within_circle (px +. w,py) -> Some `NE
+    | () when within_circle (px +. w, py +. h) -> Some `SE
+    | () when within_circle (px, py +. h) -> Some `SW
+    | _ -> None
+
+let shift_point_left_of image pos =
+  if contains pos image
+  then
+    match image with Image { position=(px,py); width; scale; _ } ->
+      let w = width *. scale in
+      (px +. w +. image_default_spacing, py)
+  else pos
+    
+
