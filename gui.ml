@@ -56,6 +56,7 @@ module type CONFIG = sig
   val get_embed_images: unit -> bool
   val set_embed_images: bool -> unit
 
+  val save_config: unit -> string list
 end
 
 module type LOGIC = sig
@@ -116,6 +117,22 @@ module Filter = struct
 end
 (* *** Settings *)
 module BuildSettings (RuntimeCTX: RUNTIME_CONTEXT) (Config: CONFIG) = struct
+  let show_errors = function [] -> () | errors ->
+    let message =
+      "While processing the requested action, ran into the following errors:\n\t - " ^
+      String.concat "\n\t - " errors in
+    let dialog =
+      GWindow.message_dialog
+        ~message
+        ~message_type:`ERROR
+        ~buttons:GWindow.Buttons.ok
+        ~parent:RuntimeCTX.w ~title:"Libre-Ref - Non-fatal Error"
+        ~urgency_hint:true ~icon_name:"dialog-error" () in
+    begin match dialog#run () with
+      | `OK | `DELETE_EVENT -> ()
+    end;
+    dialog#destroy ()
+
   let handle_settings ~queue_draw () =
     let window = GWindow.window
         ~width:50
@@ -129,9 +146,6 @@ module BuildSettings (RuntimeCTX: RUNTIME_CONTEXT) (Config: CONFIG) = struct
     let make_label txt = 
       let label = GMisc.label ~text:txt () in
       label#coerce in
-    let notebook = GPack.notebook ~width:500 ~height:800 ~packing:window#add () in
-    let add_page txt w = 
-      ignore (notebook#append_page ~tab_label:(make_label txt) w) in
     let pack_tight ?padding pane w =
       GtkPack.Box.(pack (cast pane#as_widget))
         ~expand:false
@@ -142,6 +156,14 @@ module BuildSettings (RuntimeCTX: RUNTIME_CONTEXT) (Config: CONFIG) = struct
         ~expand:true
         ~fill:true ?padding
         w#as_widget in
+    let panel = GPack.box ~packing:window#add `VERTICAL () in
+    let notebook = GPack.notebook ~width:500 ~height:800 ~packing:(pack_tight panel) () in
+    let save_button = GButton.button ~label:"Save" ~packing:(pack_tight panel) () in
+    ignore @@ save_button#connect#pressed ~callback:(fun () ->
+        show_errors @@ Config.save_config ()
+      );
+    let add_page txt w = 
+      ignore (notebook#append_page ~tab_label:(make_label txt) w) in
     let _theming_panel =
       let get_color cb = 
         let color =  cb#color in
@@ -188,7 +210,6 @@ module BuildSettings (RuntimeCTX: RUNTIME_CONTEXT) (Config: CONFIG) = struct
           );
       );
       pane in
-
     let _theming_panel =
       let range_between ?value lower upper =
         GData.adjustment ~step_incr:0.01 ~page_incr:0.01 ~page_size:0.001 ?value ~lower ~upper  () in
@@ -213,12 +234,6 @@ module BuildSettings (RuntimeCTX: RUNTIME_CONTEXT) (Config: CONFIG) = struct
         let min_vl = (Config.get_min_zoom ()) in
         let sc = (GRange.scale
                     ~digits:4
-                    (*  ~show:true
-                     *  ~digits:5
-                     * ~upper_stepper_sensitivity:`OFF
-                     * ~lower_stepper_sensitivity:`OFF
-                     * ~show_fill_level:true
-                     * ~restrict_to_fill_level:false *)
                     ~packing:(pack_loose ~padding:settings_option_value_padding panel)
                     ~adjustment:(range_between ~value:min_vl 0.05 5.0)
                     `HORIZONTAL ()) in

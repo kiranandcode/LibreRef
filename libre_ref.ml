@@ -117,7 +117,6 @@ module BuildUI (RuntimeCtx: Gui.RUNTIME_CONTEXT) (Dialog: Gui.DIALOG) : Gui.UI =
 end
 
 (* ** Main loop *)
-
 module Gui = Gui.Make (Logic) (Config) (BuildUI)
 
 let () = Gui.main ()

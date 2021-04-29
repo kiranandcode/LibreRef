@@ -75,6 +75,9 @@ module type CONFIG = sig
   (** set whether images are embedded by default *)
   val set_embed_images: bool -> unit
 
+  (** Save the current config to file  *)
+  val save_config: unit -> string list
+
 end
 
 
