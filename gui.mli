@@ -156,6 +156,6 @@ module Make : functor
   (BuildUI : functor (R : RUNTIME_CONTEXT) (D : DIALOG) -> UI) -> sig
 
   (** Run the libreref GUI *)
-  val main : unit -> unit
+  val main : ?initial_scene:string -> unit -> unit
 
 end

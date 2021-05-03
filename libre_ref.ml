@@ -119,4 +119,38 @@ end
 (* ** Main loop *)
 module Gui = Gui.Make (Logic) (Config) (BuildUI)
 
-let () = Gui.main ()
+let main config initial_scene () =
+  Option.iter Config.set_config_path config;
+  Config.load_config ();
+  Gui.main ?initial_scene ()
+
+let () =
+  let open Cmdliner in
+
+  let main_command =
+    let config_flag =
+      let doc = "Path to the base directory used to store configuration \
+                 for LibreRef. Configuration options are stored under \
+                 VAL/libre-ref" in
+      let env = Term.env_info ~doc:"Directory under which to store \
+                                    configuration files." "XDG_CONFIG_HOME" in
+      let config_info = Arg.info ~doc ~env [ "config"; "c"] in
+      Arg.(value & opt (some string) None & config_info) in
+    let initial_scene =
+      let doc = "(Optional) LibreRef scene to open." in
+      let initial_scene_info = Arg.info ~docv:"SCENE" ~doc [] in
+      Arg.(value & pos 0 (some string) None & initial_scene_info) in
+    Term.(const main $ config_flag $ initial_scene $ const ()) in
+  let libreref_info =
+    let envs = [] in
+    let man : Manpage.block list = [
+      `S Manpage.s_bugs;
+      `P "Email bug reports to <kirang at comp.nus.edu.sg>."
+    ] in
+    Term.info
+      ~doc:"A free as in freedom digital referencing tool for artists."
+      ~man ~envs
+      "libre-ref" in
+  Term.exit @@ Term.eval @@ (main_command, libreref_info)
+
+

@@ -131,12 +131,12 @@ let load_from_file ?at ?(scale=1.0) filename =
   let (let+) x f = Result.bind x f in
   let+ data =
     match () with
-    | () when is_suffix ~suffix:".png" filename  ->
-      Error.wrapping_exceptions (fun () -> Cairo.PNG.create filename)
-    | () when is_suffix ~suffix:".ps" filename  ->
-      Error.wrapping_exceptions (fun () -> Cairo.PS.create filename ~w:100.0 ~h:100.0)
-    | () when is_suffix ~suffix:".pdf" filename  ->
-      Error.wrapping_exceptions (fun () -> Cairo.PDF.create filename  ~w:100.0 ~h:100.0)
+    (* | () when is_suffix ~suffix:".png" filename  ->
+     *   Error.wrapping_exceptions (fun () -> Cairo.PNG.create filename)
+     * | () when is_suffix ~suffix:".ps" filename  ->
+     *   Error.wrapping_exceptions (fun () -> Cairo.PS.create filename ~w:100.0 ~h:100.0)
+     * | () when is_suffix ~suffix:".pdf" filename  ->
+     *   Error.wrapping_exceptions (fun () -> Cairo.PDF.create filename  ~w:100.0 ~h:100.0) *)
     | ()  ->
       begin match Stb_image.load filename with
         | Ok image ->
@@ -213,12 +213,13 @@ let from_serialized (serialised: Serialized.Image.t) =
 
 let to_serialized = function
   | Image {data; position; scale; file_ref=`Embedded; _} ->
+    print_endline @@ Printf.sprintf "loading data";
     Serialized.Image.{
       position; scale;
       data=Embedded {
-          data=Cairo.Image.get_data32 data;
-          w=Cairo.Image.get_width data;
-          h=Cairo.Image.get_height data;
+          data  = Cairo.Image.get_data32 data;
+          w     = Cairo.Image.get_width data;
+          h     = Cairo.Image.get_height data;
           alpha = match Cairo.Image.get_format data with
             | Cairo.Image.ARGB32 -> true
             | Cairo.Image.RGB24 -> false
@@ -228,7 +229,8 @@ let to_serialized = function
     }
   | Image { position; scale; file_ref=`File filename; _} ->
     Serialized.Image.{
-      position; scale;
+      position;
+      scale;
       data=Linked filename
     }
 

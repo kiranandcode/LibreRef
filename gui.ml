@@ -494,7 +494,7 @@ module Make
     (Config: CONFIG)
     (BuildUI: functor (R: RUNTIME_CONTEXT) (D: DIALOG) -> UI) =
 struct 
-  let main () =
+  let main ?initial_scene () =
     let _ = GMain.init () in
     let w = GWindow.window ~resizable:true ~title:"Libre-ref" ~width:1500 ~height:1500 () in
     let d = GMisc.drawing_area ~packing:w#add () in
@@ -521,6 +521,14 @@ struct
     ignore(w#connect#destroy ~callback:Dialogs.handle_quit_application);
 
     w#show();
-    GMain.main()
+    GMain.main();
+    (* Finally, load initial scene *)
+    begin match initial_scene with
+      | None -> ()
+      | Some scene ->
+        let errors = Logic.open_scene_from_file scene in
+        Dialogs.show_errors errors
+    end
+    
 
 end

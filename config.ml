@@ -93,7 +93,8 @@ let initialize_from_config_file file =
         then None
         else
           match
-            String.split_on_char ':' line |> List.map String.trim |> List.filter (String.equal "")
+            String.split_on_char ':' line |> List.map String.trim
+            |> List.filter (Fun.negate @@ String.equal "")
           with
           | [key; vl] -> Some (key,vl)
           | _ -> None
@@ -155,9 +156,11 @@ let set_embed_images : bool -> unit = fun vl -> embed_images := vl
 let save_config : unit -> string list = fun () ->
   try
     enforce_config_dir_exists !config_path;
-    print_endline @@ Printf.sprintf "saving to %s"  !config_path;
     save_to_config_file !config_path; []
   with e -> [Printexc.to_string e]
 
 let load_config : unit -> unit =
   fun () -> enforce_config_dir_exists !config_path; initialize_from_config_file !config_path
+
+let set_config_path : string -> unit =
+  fun path -> config_path := path; enforce_config_dir_exists !config_path
