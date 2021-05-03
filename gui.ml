@@ -500,25 +500,52 @@ let logo =
   | Ok image ->
     let w = Stb_image.width image and h = Stb_image.height image in
     let channels = Stb_image.channels image in
+    (* let format = match channels with 4 -> Cairo.Image.ARGB32 | _ -> Cairo.Image.RGB24 in *)
     let data = Utils.stb_buffer_to_bigarray image in
-    (w,h), channels>=4, data
+    (* let img = Cairo.Image.create_for_data8 ~stride:(w * 4) data format ~w ~h in *)
+    (w,h), channels>=4, data(* , img *)
   | Error _ -> assert false
 
+(* let icon_surface = let _, _, _, logo = logo in logo *)
+
 let icon =
-  let (width,height), has_alpha, data = logo in
+  let (width,height), has_alpha, data(* , _  *) = logo in
   let region = Gpointer.region_of_bigarray data in
   let pixbuf = GdkPixbuf.from_data ~width ~height ~has_alpha region in
   pixbuf
+
+let icon_small =
+  let dest = GdkPixbuf.create ~has_alpha:true ~width:100 ~height:100 () in
+  GdkPixbuf.scale ~height:100 ~width:100 ~interp:`BILINEAR ~dest icon;
+  dest
 
 module Make
     (Logic: LOGIC)
     (Config: CONFIG)
     (BuildUI: functor (R: RUNTIME_CONTEXT) (D: DIALOG) -> UI) =
 struct 
+
+  let build_splash_window () =
+    let window = 
+      GWindow.window
+        ~type_hint:`SPLASHSCREEN
+        ~icon:icon
+        ~kind:`TOPLEVEL
+        ~resizable:true
+        ~title:"Libre-ref"
+        () in
+    window 
+
+
+
   let main ?initial_scene () =
     let _ = GMain.init () in
-    let w = GWindow.window ~icon:icon ~kind:`TOPLEVEL ~resizable:true ~title:"Libre-ref" ~width:1500 ~height:1500 () in
+    let w = GWindow.window
+        ~width:300 ~height:300
+        ~icon:icon ~kind:`TOPLEVEL ~resizable:true ~title:"Libre-ref" () in
     let d = GMisc.drawing_area ~packing:w#add () in
+
+
 
     let module RuntimeCTX = struct
       let w = w
@@ -527,6 +554,53 @@ struct
     let module Dialogs = BuildDialogs (RuntimeCTX) (Logic) (Config) in
 
     let module UI = BuildUI (RuntimeCTX) (Dialogs) in
+
+    let show_splash_screen ~then_ =
+      let pack_loose ?padding pane w =
+        GtkPack.Box.(pack (cast pane#as_widget))
+          ~expand:true
+          ~fill:true ?padding
+          w#as_widget in
+      let pack_tight ?padding pane w =
+        GtkPack.Box.(pack (cast pane#as_widget))
+          ~expand:false
+          ~fill:false ?padding
+          w#as_widget in
+      let splash_window = build_splash_window () in
+      let main_layout = GPack.hbox ~width:50 ~homogeneous:false () in
+      ignore @@ GMisc.image
+        ~icon_size:`DIALOG
+        ~xpad:50 ~ypad:20
+        ~width:50 ~height:50
+        ~pixbuf:icon_small
+        ~packing:(pack_tight main_layout) ();
+      let options_box =
+        GPack.vbox ~homogeneous:true ~packing:(pack_loose ~padding:20 main_layout) () in
+      let add_button ~label ~callback =
+        let button = GButton.button ~relief:`NONE ~label
+            ~packing:(pack_tight ~padding:10 options_box) () in
+        ignore @@ button#connect#pressed ~callback in
+      add_button ~label:"New scene" ~callback:(fun () ->
+          Logic.clear_scene (); splash_window#destroy ();
+          then_ ()
+        );
+      add_button ~label:"Load scene" ~callback:(fun () ->
+          Dialogs.ask_for_libreref_filename
+            "Open scene from file" `OPEN (`OPEN, `OPEN)
+            ~then_:(fun filename ->
+                let errors = Logic.open_scene_from_file filename in
+                splash_window#destroy ();
+                Dialogs.show_errors errors;
+                then_ ());
+        );
+      add_button ~label:"Configure LibreRef" ~callback:(fun () ->
+          Dialogs.SettingsPanel.handle_settings ~queue_draw:(Dialogs.queue_draw) ()
+        );
+      add_button ~label:"Quit LibreRef" ~callback:(fun () ->
+          GMain.quit ()
+        );
+      splash_window#add main_layout#coerce;
+      splash_window#show () in
 
     let build_and_show_main_window () =
       w#set_title "Libre ref";
@@ -548,8 +622,7 @@ struct
     (* Finally, load initial scene *)
     begin match initial_scene with
       | None ->
-        (* show_splash_screen (); *)
-        build_and_show_main_window ();
+        show_splash_screen ~then_:build_and_show_main_window;
         Dialogs.queue_draw ()
       | Some scene ->
         let errors = Logic.open_scene_from_file scene in
@@ -558,6 +631,5 @@ struct
         Dialogs.queue_draw ()
     end;
     GMain.main()
-
 
 end
