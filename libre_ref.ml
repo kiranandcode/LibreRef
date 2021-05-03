@@ -122,6 +122,8 @@ module Gui = Gui.Make (Logic) (Config) (BuildUI)
 let main config initial_scene () =
   Option.iter Config.set_config_path config;
   Config.load_config ();
+  Option.iter (fun s -> print_endline @@ Printf.sprintf "got config %s" s) config;
+  Option.iter (fun s -> print_endline @@ Printf.sprintf "got scene %s" s) initial_scene;
   Gui.main ?initial_scene ()
 
 let () =

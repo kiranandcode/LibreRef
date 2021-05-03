@@ -488,6 +488,27 @@ module BuildDialogs (RuntimeCTX : RUNTIME_CONTEXT)  (Logic: LOGIC) (Config: CONF
 end
 
 (* *** Main UI  *)
+module M = GdkPixbuf
+
+let logo =
+  let data = [%blob "./resources/libre-ref-logo.png"] |> Bytes.of_string in
+  let data = Bigarray.(Array1.init int8_unsigned c_layout
+                      (Bytes.length data)
+                      (fun ind -> Char.code @@ Bytes.unsafe_get data ind)
+                   ) in
+  match Stb_image.decode data with
+  | Ok image ->
+    let w = Stb_image.width image and h = Stb_image.height image in
+    let channels = Stb_image.channels image in
+    let data = Utils.stb_buffer_to_bigarray image in
+    (w,h), channels>=4, data
+  | Error _ -> assert false
+
+let icon =
+  let (width,height), has_alpha, data = logo in
+  let region = Gpointer.region_of_bigarray data in
+  let pixbuf = GdkPixbuf.from_data ~width ~height ~has_alpha region in
+  pixbuf
 
 module Make
     (Logic: LOGIC)
@@ -496,7 +517,7 @@ module Make
 struct 
   let main ?initial_scene () =
     let _ = GMain.init () in
-    let w = GWindow.window ~resizable:true ~title:"Libre-ref" ~width:1500 ~height:1500 () in
+    let w = GWindow.window ~icon:icon ~kind:`TOPLEVEL ~resizable:true ~title:"Libre-ref" ~width:1500 ~height:1500 () in
     let d = GMisc.drawing_area ~packing:w#add () in
 
     let module RuntimeCTX = struct
@@ -507,28 +528,36 @@ struct
 
     let module UI = BuildUI (RuntimeCTX) (Dialogs) in
 
+    let build_and_show_main_window () =
+      w#set_title "Libre ref";
+      w#event#add [ `SCROLL ; `BUTTON1_MOTION; `BUTTON3_MOTION; `BUTTON_PRESS ; `BUTTON_RELEASE  ];
 
-    w#set_title "Libre ref";
-    w#event#add [ `SCROLL ; `BUTTON1_MOTION; `BUTTON3_MOTION; `BUTTON_PRESS ; `BUTTON_RELEASE  ];
+
+      ignore @@ d#misc#connect#draw ~callback:(UI.expose);
+
+      ignore @@ w#event#connect#motion_notify ~callback:UI.on_move;
+      ignore @@ w#event#connect#button_release ~callback:UI.on_button_release;
+      ignore @@ w#event#connect#button_press ~callback:UI.on_button_press;
+      ignore @@ w#event#connect#scroll ~callback:UI.on_scroll;
+      ignore(w#connect#destroy ~callback:Dialogs.handle_quit_application);
+
+      w#show () in
 
 
-    ignore @@ d#misc#connect#draw ~callback:(UI.expose);
 
-    ignore @@ w#event#connect#motion_notify ~callback:UI.on_move;
-    ignore @@ w#event#connect#button_release ~callback:UI.on_button_release;
-    ignore @@ w#event#connect#button_press ~callback:UI.on_button_press;
-    ignore @@ w#event#connect#scroll ~callback:UI.on_scroll;
-    ignore(w#connect#destroy ~callback:Dialogs.handle_quit_application);
-
-    w#show();
-    GMain.main();
     (* Finally, load initial scene *)
     begin match initial_scene with
-      | None -> ()
+      | None ->
+        (* show_splash_screen (); *)
+        build_and_show_main_window ();
+        Dialogs.queue_draw ()
       | Some scene ->
         let errors = Logic.open_scene_from_file scene in
-        Dialogs.show_errors errors
-    end
-    
+        build_and_show_main_window ();
+        Dialogs.show_errors errors;
+        Dialogs.queue_draw ()
+    end;
+    GMain.main()
+
 
 end

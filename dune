@@ -1,5 +1,7 @@
 (executable
  (name libre_ref)
  (libraries cmdliner data-encoding lablgtk3 stb_image bos)
+ (preprocess (pps ppx_blob))
+ (preprocessor_deps ./resources/libre-ref-logo.png)
  (ocamlopt_flags "-g"))
 (documentation)
