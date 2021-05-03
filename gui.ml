@@ -445,6 +445,15 @@ module BuildDialogs (RuntimeCTX : RUNTIME_CONTEXT)  (Logic: LOGIC) (Config: CONF
 (* **** Right click *)
   let show_right_click_menu button =
     let menu = GMenu.menu () in
+
+
+    let load_image = GMenu.menu_item ~label:"Open image(s)" () in
+    menu#add load_image;
+    ignore @@ load_image#connect#activate
+      ~callback:(handle_load_images button);
+
+    menu#add @@ GMenu.separator_item ();
+
     let new_scene_w = GMenu.menu_item ~label:"New scene" () in
     menu#add new_scene_w;
     ignore @@ new_scene_w#connect#activate
@@ -453,7 +462,6 @@ module BuildDialogs (RuntimeCTX : RUNTIME_CONTEXT)  (Logic: LOGIC) (Config: CONF
     let save_scene_w = GMenu.menu_item ~label:"Save scene" () in
     menu#add save_scene_w;
     ignore @@ save_scene_w#connect#activate ~callback:handle_save_scene;
-
 
     let save_scene_w = GMenu.menu_item ~label:"Save scene as" () in
     menu#add save_scene_w;
@@ -465,10 +473,8 @@ module BuildDialogs (RuntimeCTX : RUNTIME_CONTEXT)  (Logic: LOGIC) (Config: CONF
     ignore @@ open_scene_w#connect#activate
       ~callback:handle_load_scene;
 
-    let load_image = GMenu.menu_item ~label:"Open image(s)" () in
-    menu#add load_image;
-    ignore @@ load_image#connect#activate
-      ~callback:(handle_load_images button);
+
+    menu#add @@ GMenu.separator_item ();
 
     let settings = GMenu.menu_item ~label:"Configure LibreRef" () in
     menu#add settings;
@@ -528,6 +534,7 @@ struct
   let build_splash_window () =
     let window = 
       GWindow.window
+        ~position:`CENTER
         ~type_hint:`SPLASHSCREEN
         ~icon:icon
         ~kind:`TOPLEVEL
