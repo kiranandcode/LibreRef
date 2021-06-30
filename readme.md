@@ -1,6 +1,9 @@
 # LibreRef
+***NOTE: This is a M$ github mirror of LibreRef's main repository which is hosted on Gitlab. Please see the Gitlab version to keep up to date with the latest version of LibreRef.***
 
- <img src="https://gitlab.com/gopiandcode/libre-ref/-/raw/master/resources/libre-ref-logo.png" width="20%" height="20%">
+ <img
+ src="https://gitlab.com/gopiandcode/libre-ref/-/raw/master/resources/libre-ref-logo.png"
+ width="20%" height="20%">
 
 > LibreRef is a free as in freedom digital referencing tool for artists.
 
