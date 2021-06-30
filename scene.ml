@@ -35,23 +35,15 @@ let set_source_rgbi cr (r,g,b) =
   Cairo.set_source_rgb cr (r) (g) (b)
 
 type state =
-  | ButtonPressOnImage of Image.t * (float * float) * [`Base of Image.t | `Selected ] list
-  | ButtonPress of (float * float) * Image.t list * bool
-  | MovingActive of  (float * float) * Image.t list
-  | ScalingActive of [`NW | `NE | `SE | `SW ] * (float * float) * Image.t list
-  | Normal of Image.t list
-
-let state_elts = function
-  | Normal ls -> ls
-  | MovingActive (_, ls) -> ls
-  | ScalingActive (_, _, ls) -> ls
-  | ButtonPress (_, ls, _) -> ls
-  | ButtonPressOnImage (selected, _, ls) ->
-    List.map (function `Base img -> img | `Selected -> selected) ls
+  | ButtonPress of (float * float) * bool
+  | MovingActive of  (float * float)
+  | ScalingActive of [`NW | `NE | `SE | `SW ] * (float * float)
+  | Normal
 
 type t = {
   state: state;
   active: Image.t option;
+  images: Image.t list;
   camera: Camera.t;
   filename: string option;
   any_changes: bool;
@@ -72,7 +64,8 @@ let generate_title =
       (if any_changes then " (*)" else "")
 
 let init images = {
-  state=Normal images;
+  state=Normal;
+  images;
   active=None;
   camera=Camera.create ();
   filename=None;
@@ -80,14 +73,14 @@ let init images = {
 }
 
 let elts scene =
-  Option.to_list scene.active @ List.rev @@ state_elts scene.state
+  Option.to_list scene.active @ List.rev @@ scene.images
 
 
 let from_serialized ?filename (scene: Serialized.Scene.t) =
   let (images,errors) =
     Error.acc_map Image.from_serialized scene.images in
   let camera = Camera.from_serialized scene.camera in
-  {state=Normal images; active=None; camera; filename; any_changes=false}, errors
+  {state=Normal; images; active=None; camera; filename; any_changes=false}, errors
 
 let to_serialized scene =
   Serialized.Scene.{
@@ -110,15 +103,14 @@ let find_split p ls =
   let rec loop aux = function
     | [] -> None
     | x :: xs when p x ->
-      let xs = List.map (fun v -> `Base v) xs in
-      Some (x, List.rev_append (`Selected :: aux) xs)
-    | x :: xs -> loop (`Base x :: aux) xs in
+      Some (x, List.rev_append (aux) xs)
+    | x :: xs -> loop (x :: aux) xs in
   loop [] ls
 
-let mouse_pressed p scene =
+let mouse_select_pressed p scene =
   let p_in_world = Camera.screen_to_world scene.camera (fst p) (snd p) in
-  let selected_image = find_split (Image.contains p_in_world) (state_elts scene.state) in
-  let state =
+  let selected_image = find_split (Image.contains p_in_world) scene.images in
+  let state, images, active =
     match
       selected_image,
       Option.map (Image.contains p_in_world) scene.active,
@@ -126,14 +118,22 @@ let mouse_pressed p scene =
     with
     | _, _, Some corner ->
       let anchor = Option.get scene.active |> Image.anchor in
-      ScalingActive (corner, anchor corner, state_elts scene.state)
+      ScalingActive (corner, anchor corner), scene.images, scene.active
     | _, Some true, _ ->
       let p = Camera.screen_to_world scene.camera (fst p) (snd p) in
-      MovingActive (p, state_elts scene.state)
-    | None, _, _ -> ButtonPress (p, state_elts scene.state, false)
-    | Some (selected, rest), _, _ -> ButtonPressOnImage (selected, p, rest) in
+      MovingActive (p), scene.images, scene.active
+    | None, _, _ -> Normal, scene.images @ Option.to_list scene.active, None
+    | Some (selected, rest), _, _ ->
+       Normal, rest @ Option.to_list scene.active, Some selected in
+  let scene = {scene with state; images; active} in
+  scene
+
+
+let mouse_drag_pressed p scene =
+  let state = ButtonPress (p, false) in
   let scene = {scene with state} in
   scene
+
 
 let mouse_motion p scene =
   let update_camera (o_x,o_y) (x,y) =
@@ -145,35 +145,28 @@ let mouse_motion p scene =
   let update_image_scale corner anchor p =
     Option.map (Image.scale_using_corner ~anchor ~corner p) scene.active in
   let camera, active, state, any_changes = match scene.state with
-    | ButtonPressOnImage (_, op, _) as v ->
-      let elts = state_elts v in
-      update_camera op p, scene.active, ButtonPress (p, elts, true), true
-    | MovingActive (op, elts) ->
+    | MovingActive (op) ->
       let p = Camera.screen_to_world scene.camera (fst p) (snd p) in
-      scene.camera, update_image op p, MovingActive (p, elts), true
-    | ScalingActive (cnr, anchor, elts) ->
+      scene.camera, update_image op p, MovingActive (p), true
+    | ScalingActive (cnr, anchor) ->
       let p = Camera.screen_to_world scene.camera (fst p) (snd p) in
-      scene.camera, update_image_scale cnr anchor p, ScalingActive (cnr, anchor, elts), true
-    | ButtonPress (op, ls, _) ->
-      update_camera op p, scene.active, ButtonPress (p, ls, true), true
-    | Normal elts -> scene.camera, scene.active, ButtonPress (p, elts, true), scene.any_changes in
+      scene.camera, update_image_scale cnr anchor p, ScalingActive (cnr, anchor), true
+    | ButtonPress (op, _) ->
+      update_camera op p, scene.active, ButtonPress (p, true), false
+    | Normal -> scene.camera, scene.active, Normal, scene.any_changes in
   let scene = {scene with camera; state; active; any_changes} in
   scene
 
 let mouse_released scene =
-  let active, state = match scene.state with
-    | ButtonPressOnImage (img, _, images) ->
-      let elts = List.filter_map (function `Selected -> None | `Base v -> Some v) images @
-                 Option.to_list scene.active in
-      Some (img), Normal elts
-    | MovingActive (_, elts) -> scene.active, Normal (elts)
-    | ScalingActive (_, _, elts) -> scene.active, Normal (elts)
-    | Normal _ as v -> scene.active, v 
-    | (ButtonPress (_, _, any_motion) as v) ->
+  let active, state, images = match scene.state with
+    | MovingActive (_) -> scene.active, Normal, scene.images
+    | ScalingActive (_, _) -> scene.active, Normal, scene.images
+    | Normal as v -> scene.active, v, scene.images
+    | ButtonPress (_, any_motion) ->
       match any_motion with
-      | false -> None, Normal (state_elts v @ Option.to_list scene.active)
-      | true -> scene.active, Normal (state_elts v) in
-  let scene = {scene with state; active} in
+      | false -> None, Normal, (scene.images @ Option.to_list scene.active)
+      | true -> scene.active, Normal, scene.images in
+  let scene = {scene with state; images; active} in
   scene
 
 let draw scene cr  =
@@ -181,7 +174,7 @@ let draw scene cr  =
   Cairo.paint cr;
 
   Cairo.set_matrix cr (Camera.to_view_matrix scene.camera);
-  List.iter (Image.draw cr) (state_elts scene.state);
+  List.iter (Image.draw cr) (scene.images);
   Option.iter (Image.draw_selected cr) scene.active
 
 let zoom_around ~by (x,y)  scene =
@@ -192,19 +185,19 @@ let add_image_at (x,y) filename scene =
   let pos = Camera.screen_to_world scene.camera x y in
   let open Error in
   let+ image = Image.load_from_file ~at:pos filename in
-  let state, active =
-    Normal (state_elts scene.state @ Option.to_list scene.active),
+  let state, images, active =
+    Normal, (scene.images @ Option.to_list scene.active),
     Some image in
-  Ok {scene with state; active; any_changes=true}
+  Ok {scene with state; images; active; any_changes=true}
 
 let add_raw_image_at (x,y) pixbuf scene =
   let pos = Camera.screen_to_world scene.camera x y in
   let open Error in
   let+ image = Image.load_from_pixbuf ~at:pos pixbuf in
-  let state, active =
-    Normal (state_elts scene.state @ Option.to_list scene.active),
+  let state, images, active =
+    Normal, (scene.images @ Option.to_list scene.active),
     Some image in
-  Ok {scene with state; active; any_changes=true}
+  Ok {scene with state; images; active; any_changes=true}
 
 let add_images_at (x,y) filenames scene =
   let pos = Camera.screen_to_world scene.camera x y in
@@ -222,9 +215,9 @@ let add_images_at (x,y) filenames scene =
   match images with
   | [] -> scene, errors
   | first :: rest ->
-    let state, active =
-      Normal (state_elts scene.state @ Option.to_list scene.active @ rest),
+    let state, images, active =
+      Normal, (scene.images @ Option.to_list scene.active @ rest),
       Some first in
-    {scene with state; active; any_changes=true}, errors
+    {scene with state; images; active; any_changes=true}, errors
 
 

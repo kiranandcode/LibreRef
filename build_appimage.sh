@@ -13,7 +13,7 @@ fi
 
 # run linux deploy to collect all libraries
 linuxdeploy-x86_64.AppImage --appdir ./AppDir \
-                            --desktop-file ./libre-ref.desktop \
+                            --desktop-file ./resources/libre-ref.desktop \
                             --icon-file ./resources/libre-ref-logo.png \
                             --icon-filename libre-ref
 
