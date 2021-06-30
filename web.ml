@@ -40,7 +40,7 @@ let get_sync url =
   let open Lwt_result.Syntax in
 
   Lwt_main.run begin
-    print_endline "Sending request...";
+    (* print_endline "Sending request..."; *)
 
     let* response = Client.Oneshot.get (Uri.of_string url) in
 

@@ -235,7 +235,6 @@ let zoom_around ~by (x,y)  scene =
 let can_delete scene = Option.is_some scene.active
 
 let delete_active_image scene =
-  print_endline @@ Printf.sprintf "deleting selected image!";
   {scene with active=None; cache=None; any_changes=true}
 
 let add_image_at (x,y) filename scene =

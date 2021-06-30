@@ -93,9 +93,15 @@ module BuildUI (RuntimeCtx: Gui.RUNTIME_CONTEXT) (Dialog: Gui.DIALOG) : Gui.UI =
     queue_draw ();
     false 
 
-  let on_button_release = fun _m ->
-    scene := Scene.mouse_released !scene;
-    queue_draw ();
+  let on_button_release = fun m ->
+    let button = GdkEvent.Button.button m in
+    begin match button with
+      | 3 ->
+        Dialog.show_right_click_menu ~can_delete:(Scene.can_delete !scene) m
+      | _ ->
+        scene := Scene.mouse_released !scene;
+        queue_draw ();
+    end;
     false 
 
   let on_button_press = fun m ->
@@ -108,8 +114,6 @@ module BuildUI (RuntimeCtx: Gui.RUNTIME_CONTEXT) (Dialog: Gui.DIALOG) : Gui.UI =
       | 2 ->
         scene := Scene.mouse_drag_pressed (x,y) !scene;
         queue_draw ()
-      | 3 ->
-        Dialog.show_right_click_menu ~can_delete:(Scene.can_delete !scene) m
       | _ -> ()
     end;
     false
@@ -147,8 +151,8 @@ module Gui = Gui.Make (Logic) (Config) (BuildUI)
 let main config initial_scene () =
   Option.iter Config.set_config_path config;
   Config.load_config ();
-  Option.iter (fun s -> print_endline @@ Printf.sprintf "got config %s" s) config;
-  Option.iter (fun s -> print_endline @@ Printf.sprintf "got scene %s" s) initial_scene;
+  (* Option.iter (fun s -> print_endline @@ Printf.sprintf "got config %s" s) config;
+   * Option.iter (fun s -> print_endline @@ Printf.sprintf "got scene %s" s) initial_scene; *)
   Gui.main ?initial_scene ()
 
 let () =

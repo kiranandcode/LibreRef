@@ -126,13 +126,17 @@
     CLOSED: [2021-05-31 Mon 11:51]
 ** DONE Support C-c C-v pasting
    CLOSED: [2021-06-01 Tue 13:23]
-** TODO Update keybindings
+** DONE Update keybindings
+   CLOSED: [2021-06-30 Wed 19:48]
 *** Mouse/Right mouse click to select
 *** Middle/Space drag to move
-** TODO Scale on 
-** TODO Delete images via right click
-*** TODO right click changes active
-*** TODO if active, add options to right click menu
+** TODO Scale on scroll
+** DONE Delete images via right click
+   CLOSED: [2021-06-30 Wed 19:49]
+*** DONE right click changes active
+    CLOSED: [2021-06-30 Wed 19:49]
+*** DONE if active, add options to right click menu
+    CLOSED: [2021-06-30 Wed 19:49]
 ** TODO Delete selected images on del
 ** TODO Select multiple
 *** TODO right click and drag - selection

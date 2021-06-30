@@ -692,8 +692,7 @@ struct
     let build_and_show_main_window () =
       w#set_title "Libre ref";
       w#event#add [
-        `SCROLL ; `BUTTON1_MOTION; `BUTTON3_MOTION;
-        `BUTTON_PRESS ; `BUTTON_RELEASE; `KEY_PRESS
+        `SCROLL ; `KEY_PRESS
       ];
 
 

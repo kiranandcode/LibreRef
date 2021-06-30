@@ -134,7 +134,7 @@ let load_from_file ?at ?(scale=1.0) filename =
     | ()  ->
       begin match Stb_image.load filename with
         | Ok image ->
-          print_endline @@ Printf.sprintf "Got image (wxh=%dx%d,channels=%d,offset=%d,stride=%d(%d*%d))\n"  image.width image.height image.channels image.offset image.stride image.width (image.stride/image.width);
+          (* print_endline @@ Printf.sprintf "Got image (wxh=%dx%d,channels=%d,offset=%d,stride=%d(%d*%d))\n"  image.width image.height image.channels image.offset image.stride image.width (image.stride/image.width); *)
           Error.wrapping_exceptions (fun () ->
               Utils.stb_buffer_to_cairo_surface image
             )
@@ -169,7 +169,7 @@ let load_from_pixbuf ?at ?(scale=1.0) pixbuf =
     | ()  ->
       begin match   Utils.pixbuf_to_stb_image pixbuf with
         | Ok image ->
-          print_endline @@ Printf.sprintf "Got image (wxh=%dx%d,channels=%d,offset=%d,stride=%d(%d*%d))\n"  image.width image.height image.channels image.offset image.stride image.width (image.stride/image.width);
+          (* print_endline @@ Printf.sprintf "Got image (wxh=%dx%d,channels=%d,offset=%d,stride=%d(%d*%d))\n"  image.width image.height image.channels image.offset image.stride image.width (image.stride/image.width); *)
           Error.wrapping_exceptions (fun () ->
               Utils.stb_buffer_to_cairo_surface image
             )
@@ -201,7 +201,7 @@ let from_serialized (serialised: Serialized.Image.t) =
 
 let to_serialized = function
   | Image {data; position; scale; file_ref=`Embedded; _} ->
-    print_endline @@ Printf.sprintf "loading data";
+    (* print_endline @@ Printf.sprintf "loading data"; *)
     Serialized.Image.{
       position; scale;
       data=Embedded {
