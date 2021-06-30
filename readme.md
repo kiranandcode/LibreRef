@@ -14,7 +14,33 @@ Usage:
 
 # Screenshots
 
+<img src="https://gitlab.com/gopiandcode/libre-ref/-/raw/master/images/splash.png" width="30%" height="30%">
+
+<img src="https://gitlab.com/gopiandcode/libre-ref/-/raw/master/images/options.png" width="30%" height="30%">
+
+<img src="https://gitlab.com/gopiandcode/libre-ref/-/raw/master/images/scaling.png" width="30%" height="30%">
+
 # Building from Source
+
+To build this project from source, you will need to have the Opam OCaml package manager installed on your system, with a 4.12.0 OCaml compiler switch.
+
+Make sure the following OCaml packages are installed (`opam install <package-name>`):
+
+ - cmdliner 
+ - data-encoding 
+ - lablgtk3 
+ - stb_image 
+ - bos 
+ - piaf
+
+To build LibreRef from source, simply execute the following command from the project root:
+```
+opam exec -- dune build ./libre_ref.exe
+```
+
+Additionally, to produce a deployable AppImage file for LibreRef, simply run the `build_appimage.sh` script from the project root.
+
+Note: you will have to have the linuxdeploy and appimagetool appimages on your path.
 
 # Project Architecture
 The LibreRef project is structured as follows:
