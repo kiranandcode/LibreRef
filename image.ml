@@ -251,8 +251,8 @@ let shift_point_left_of image pos =
 let calculate_bounding_box (ls: t list) : (float * float * float * float) option =
   let result' = 
     List.fold_left
-      (fun (lx,ly,mx,my) (Image { position=(px,py); width; height; scale=_; _}) ->
-         let pxm, pym = px +. width (* *. scale *), py +. height (* *. scale *) in
+      (fun (lx,ly,mx,my) (Image { position=(px,py); width; height; scale; _}) ->
+         let pxm, pym = px +. width *. scale, py +. height *. scale in
          let lx', mx' = Float.min lx px, Float.max mx pxm 
          and ly', my' = Float.min ly py, Float.max my pym in
          (lx',ly',mx',my')
