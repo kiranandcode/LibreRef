@@ -21,11 +21,24 @@ LibreRef is distributed as an AppImage for easy use:
 
 # Screenshots
 
+(A picture is worth a thousand words)
+
 <img src="https://raw.githubusercontent.com/Gopiandcode/LibreRef/master/images/splash.png" width="30%" height="30%">
 
 <img src="https://raw.githubusercontent.com/Gopiandcode/LibreRef/master/images/options.png" width="30%" height="30%">
 
 <img src="https://raw.githubusercontent.com/Gopiandcode/LibreRef/master/images/scaling.png" width="30%" height="30%">
+
+# Videos
+
+![basic functionality](https://raw.githubusercontent.com/Gopiandcode/LibreRef/master/images/basic_functionality.gif)
+
+![resizing and multiple](https://raw.githubusercontent.com/Gopiandcode/LibreRef/master/images/resizing_and_multiple.gif)
+
+![paste from online](https://raw.githubusercontent.com/Gopiandcode/LibreRef/master/images/paste_from_online.gif)
+
+![deleting images](https://raw.githubusercontent.com/Gopiandcode/LibreRef/master/images/deleting_images.gif)
+
 
 # Building from Source
 
