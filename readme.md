@@ -1,5 +1,5 @@
 # LibreRef
-***NOTE: This is a M$ github mirror of LibreRef's main repository which is hosted on Gitlab. Please see the Gitlab version to keep up to date with the latest version of LibreRef.***
+***NOTE: This is a M$ github mirror of LibreRef's main repository which is [hosted on Gitlab](https://gitlab.com/gopiandcode/libre-ref/). Please see the Gitlab version to keep up to date with the latest version of LibreRef.***
 
  <img
  src="https://raw.githubusercontent.com/Gopiandcode/LibreRef/master/resources/libre-ref-logo.png"
