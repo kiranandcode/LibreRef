@@ -75,6 +75,12 @@ module type CONFIG = sig
   (** set whether images are embedded by default *)
   val set_embed_images: bool -> unit
 
+  (** get whether caching is used for performance *)
+  val get_cache_drawing: unit -> bool
+
+  (** set whether caching is used for performance *)
+  val set_cache_drawing: bool -> unit
+
   (** Save the current config to file  *)
   val save_config: unit -> string list
 

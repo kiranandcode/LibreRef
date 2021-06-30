@@ -4,6 +4,12 @@
 
 > LibreRef is a free as in freedom digital referencing tool for artists.
 
+Usage: 
+   - Middle-mouse to move view
+   - Left click to select images
+   - Right click to open menu
+   - Drag and drop images into display
+
 # Download
 
 # Screenshots

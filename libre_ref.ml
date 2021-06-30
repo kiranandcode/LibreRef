@@ -106,7 +106,8 @@ module BuildUI (RuntimeCtx: Gui.RUNTIME_CONTEXT) (Dialog: Gui.DIALOG) : Gui.UI =
       | 2 ->
         scene := Scene.mouse_drag_pressed (x,y) !scene;
         queue_draw ()
-      | 3 -> Dialog.show_right_click_menu m
+      | 3 ->
+        Dialog.show_right_click_menu m
       | _ -> ()
     end;
     false

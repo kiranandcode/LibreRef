@@ -31,14 +31,48 @@ if any, to sign a "copyright disclaimer" for the program, if necessary.
 For more information on this, and how to apply and follow the GNU AGPL, see
 <https://www.gnu.org/licenses/>.
 c*)
+
 let set_source_rgbi cr (r,g,b) =
   Cairo.set_source_rgb cr (r) (g) (b)
+
+module Cache = struct
+
+  type t = { surface: [`Surface ] Cairo.Pattern.t; x: float; y: float; }
+
+  let init (images: Image.t list) : t option =
+    let (let+) x f = Option.bind x f in
+    if not @@  Config.get_cache_drawing ()
+    then None
+    else
+      let+ (x,y,w,h) = Image.calculate_bounding_box images in
+      let surface = Cairo.Image.(create RGB24 ~w:(Int.of_float w) ~h:(Int.of_float h)) in
+      let () =
+        let cr = Cairo.create surface in
+        Cairo.Pattern.set_filter (Cairo.get_source cr) Cairo.Pattern.FAST;
+        Cairo.translate cr (-.x) (-.y);
+        set_source_rgbi cr !Config.background_color;
+        Cairo.paint cr;
+        List.iter (Image.draw cr) (images) in
+      let surface =   Cairo.Pattern.create_for_surface surface in
+      Cairo.Pattern.set_filter surface Cairo.Pattern.FAST;
+      Some {surface; x; y}
+
+  let draw (cache: t) cr : unit =
+    Cairo.save cr;
+    ignore @@ Cairo.translate cr (cache.x) (cache.y);
+    Cairo.set_source cr cache.surface;  
+    Cairo.paint cr;
+    Cairo.restore cr
+
+end
+
 
 type state =
   | ButtonPress of (float * float) * bool
   | MovingActive of  (float * float)
   | ScalingActive of [`NW | `NE | `SE | `SW ] * (float * float)
   | Normal
+
 
 type t = {
   state: state;
@@ -47,6 +81,7 @@ type t = {
   camera: Camera.t;
   filename: string option;
   any_changes: bool;
+  cache: Cache.t option;
 }
 
 let camera_focus t =
@@ -70,6 +105,7 @@ let init images = {
   camera=Camera.create ();
   filename=None;
   any_changes=false;
+  cache = Cache.init images
 }
 
 let elts scene =
@@ -80,7 +116,10 @@ let from_serialized ?filename (scene: Serialized.Scene.t) =
   let (images,errors) =
     Error.acc_map Image.from_serialized scene.images in
   let camera = Camera.from_serialized scene.camera in
-  {state=Normal; images; active=None; camera; filename; any_changes=false}, errors
+  {
+    state=Normal; images; active=None; camera;
+    filename; any_changes=false; cache = Cache.init images;
+  }, errors
 
 let to_serialized scene =
   Serialized.Scene.{
@@ -110,7 +149,7 @@ let find_split p ls =
 let mouse_select_pressed p scene =
   let p_in_world = Camera.screen_to_world scene.camera (fst p) (snd p) in
   let selected_image = find_split (Image.contains p_in_world) scene.images in
-  let state, images, active =
+  let state, images, active, cache =
     match
       selected_image,
       Option.map (Image.contains p_in_world) scene.active,
@@ -118,14 +157,17 @@ let mouse_select_pressed p scene =
     with
     | _, _, Some corner ->
       let anchor = Option.get scene.active |> Image.anchor in
-      ScalingActive (corner, anchor corner), scene.images, scene.active
+      ScalingActive (corner, anchor corner), scene.images, scene.active, scene.cache
     | _, Some true, _ ->
       let p = Camera.screen_to_world scene.camera (fst p) (snd p) in
-      MovingActive (p), scene.images, scene.active
-    | None, _, _ -> Normal, scene.images @ Option.to_list scene.active, None
+      MovingActive (p), scene.images, scene.active, scene.cache
+    | None, _, _ ->
+      let images = scene.images @ Option.to_list scene.active in
+      Normal, images, None, Cache.init images
     | Some (selected, rest), _, _ ->
-       Normal, rest @ Option.to_list scene.active, Some selected in
-  let scene = {scene with state; images; active} in
+      let images = rest @ Option.to_list scene.active in
+      Normal, images, Some selected, None in
+  let scene = {scene with state; images; active; cache} in
   scene
 
 
@@ -134,6 +176,7 @@ let mouse_drag_pressed p scene =
   let scene = {scene with state} in
   scene
 
+let build_cache_if_empty cache images = match cache with None -> Cache.init images | _ -> cache
 
 let mouse_motion p scene =
   let update_camera (o_x,o_y) (x,y) =
@@ -144,37 +187,48 @@ let mouse_motion p scene =
     Option.map (Image.move_by dx dy) scene.active in
   let update_image_scale corner anchor p =
     Option.map (Image.scale_using_corner ~anchor ~corner p) scene.active in
-  let camera, active, state, any_changes = match scene.state with
+  let build_cache () = build_cache_if_empty scene.cache scene.images in
+  let camera, active, state, any_changes, cache = match scene.state with
     | MovingActive (op) ->
       let p = Camera.screen_to_world scene.camera (fst p) (snd p) in
-      scene.camera, update_image op p, MovingActive (p), true
+      scene.camera, update_image op p, MovingActive (p), true, build_cache ()
     | ScalingActive (cnr, anchor) ->
       let p = Camera.screen_to_world scene.camera (fst p) (snd p) in
-      scene.camera, update_image_scale cnr anchor p, ScalingActive (cnr, anchor), true
+      scene.camera, update_image_scale cnr anchor p,
+      ScalingActive (cnr, anchor), true, build_cache ()
     | ButtonPress (op, _) ->
-      update_camera op p, scene.active, ButtonPress (p, true), false
-    | Normal -> scene.camera, scene.active, Normal, scene.any_changes in
-  let scene = {scene with camera; state; active; any_changes} in
+      update_camera op p, scene.active, ButtonPress (p, true), scene.any_changes, scene.cache
+    | Normal -> scene.camera, scene.active, Normal, scene.any_changes, scene.cache in
+  let scene = {scene with camera; state; active; any_changes; cache} in
   scene
 
 let mouse_released scene =
-  let active, state, images = match scene.state with
-    | MovingActive (_) -> scene.active, Normal, scene.images
-    | ScalingActive (_, _) -> scene.active, Normal, scene.images
-    | Normal as v -> scene.active, v, scene.images
+  let active, state, images, cache = match scene.state with
+    | MovingActive (_) -> scene.active, Normal, scene.images, scene.cache
+    | ScalingActive (_, _) -> scene.active, Normal, scene.images, scene.cache
+    | Normal as v -> scene.active, v, scene.images, scene.cache
     | ButtonPress (_, any_motion) ->
       match any_motion with
-      | false -> None, Normal, (scene.images @ Option.to_list scene.active)
-      | true -> scene.active, Normal, scene.images in
-  let scene = {scene with state; images; active} in
+      | false ->
+        let images = (scene.images @ Option.to_list scene.active) in
+        None, Normal, images, Cache.init images
+      | true -> scene.active, Normal, scene.images, scene.cache in
+  let scene = {scene with state; images; active; cache} in
   scene
 
 let draw scene cr  =
   set_source_rgbi cr !Config.background_color;
   Cairo.paint cr;
-
   Cairo.set_matrix cr (Camera.to_view_matrix scene.camera);
-  List.iter (Image.draw cr) (scene.images);
+
+
+  begin match scene.cache with 
+    | None ->
+      List.iter (Image.draw cr) (scene.images);
+    | Some cache ->
+      Cache.draw cache cr;
+  end;
+
   Option.iter (Image.draw_selected cr) scene.active
 
 let zoom_around ~by (x,y)  scene =
@@ -219,5 +273,4 @@ let add_images_at (x,y) filenames scene =
       Normal, (scene.images @ Option.to_list scene.active @ rest),
       Some first in
     {scene with state; images; active; any_changes=true}, errors
-
 

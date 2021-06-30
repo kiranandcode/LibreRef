@@ -56,6 +56,9 @@ module type CONFIG = sig
   val get_embed_images: unit -> bool
   val set_embed_images: bool -> unit
 
+  val get_cache_drawing: unit -> bool
+  val set_cache_drawing: bool -> unit
+
   val save_config: unit -> string list
 end
 
@@ -290,6 +293,22 @@ module BuildSettings (RuntimeCTX: RUNTIME_CONTEXT) (Config: CONFIG) = struct
             ~label:"Embed images selected using the filepicker" ())) in
       ignore @@ cb#connect#toggled ~callback:(fun () ->
           Config.set_embed_images cb#active
+        );
+      pane in
+
+    let _behaviour_panel =
+      let pane = GPack.box ~packing:(add_page "Behaviour") `VERTICAL () in
+      ignore ((GMisc.label
+                 ~ypad:settings_title_padding
+                 ~packing:(pack_tight pane)
+                 ~justify:`LEFT ~markup:"<b>Use draw cache</b>" ()));
+
+      let cb =  ((
+          GButton.check_button ~active:(Config.get_cache_drawing ())
+            ~packing:(pack_tight pane)
+            ~label:"Use extra memory to cache drawings and improve performance/smoothness" ())) in
+      ignore @@ cb#connect#toggled ~callback:(fun () ->
+          Config.set_cache_drawing cb#active
         );
       pane in
 

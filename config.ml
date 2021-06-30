@@ -82,6 +82,7 @@ let outline_color = ref (0., 0.75, 0.6)
 let min_zoom = ref 0.05
 let max_zoom = ref 5.00
 let embed_images = ref true
+let cache_drawing = ref true
 
 let initialize_from_config_file file =
   let txt = read_whole_file file in
@@ -115,17 +116,18 @@ let initialize_from_config_file file =
   set_ref_from outline_color ~key:"outline" ~from_:read_color;
   set_ref_from min_zoom ~key:"min-zoom" ~from_:float_of_string_opt;
   set_ref_from max_zoom ~key:"max-zoom" ~from_:float_of_string_opt;
-  set_ref_from embed_images ~key:"embed" ~from_:bool_of_string_opt
+  set_ref_from embed_images ~key:"embed" ~from_:bool_of_string_opt;
+  set_ref_from embed_images ~key:"cache" ~from_:bool_of_string_opt
 
 let save_to_config_file filename =
   let color_to_string v =
     let (r,g,b) = convert_internal_to_color v in
     Printf.sprintf "%d,%d,%d" r g b in
   let txt = 
-    Printf.sprintf "background: %s\noutline: %s\nmin-zoom: %f\nmax-zoom: %f\nembed: %b"
+    Printf.sprintf "background: %s\noutline: %s\nmin-zoom: %f\nmax-zoom: %f\nembed: %b\ncache: %b"
       (color_to_string !background_color)
       (color_to_string !outline_color)
-      (!min_zoom) (!max_zoom) (!embed_images) in
+      (!min_zoom) (!max_zoom) (!embed_images) (!cache_drawing) in
   write_to_file ~filename txt
 
 (* * Interface *)
@@ -152,6 +154,10 @@ let set_max_zoom : float -> unit = fun vl -> max_zoom := vl
 let get_embed_images : unit -> bool = fun () -> !embed_images
 
 let set_embed_images : bool -> unit = fun vl -> embed_images := vl
+
+let get_cache_drawing : unit -> bool = fun () -> !cache_drawing
+
+let set_cache_drawing : bool -> unit = fun vl -> cache_drawing := vl
 
 let save_config : unit -> string list = fun () ->
   try
