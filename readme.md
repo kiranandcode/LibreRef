@@ -2,7 +2,7 @@
 ***NOTE: This is a M$ github mirror of LibreRef's main repository which is hosted on Gitlab. Please see the Gitlab version to keep up to date with the latest version of LibreRef.***
 
  <img
- src="https://gitlab.com/gopiandcode/libre-ref/-/raw/master/resources/libre-ref-logo.png"
+ src="https://raw.githubusercontent.com/Gopiandcode/LibreRef/master/resources/libre-ref-logo.png"
  width="20%" height="20%">
 
 > LibreRef is a free as in freedom digital referencing tool for artists.
@@ -17,11 +17,11 @@ Usage:
 
 # Screenshots
 
-<img src="https://gitlab.com/gopiandcode/libre-ref/-/raw/master/images/splash.png" width="30%" height="30%">
+<img src="https://raw.githubusercontent.com/Gopiandcode/LibreRef/master/images/splash.png" width="30%" height="30%">
 
-<img src="https://gitlab.com/gopiandcode/libre-ref/-/raw/master/images/options.png" width="30%" height="30%">
+<img src="https://raw.githubusercontent.com/Gopiandcode/LibreRef/master/images/options.png" width="30%" height="30%">
 
-<img src="https://gitlab.com/gopiandcode/libre-ref/-/raw/master/images/scaling.png" width="30%" height="30%">
+<img src="https://raw.githubusercontent.com/Gopiandcode/LibreRef/master/images/scaling.png" width="30%" height="30%">
 
 # Building from Source
 
