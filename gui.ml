@@ -313,6 +313,43 @@ module BuildSettings (RuntimeCTX: RUNTIME_CONTEXT) (Config: CONFIG) = struct
         );
       pane in
 
+    let _license_panel =
+      let pane = GPack.box ~packing:(add_page "About LibreRef") `VERTICAL () in
+
+      ignore ((GMisc.label
+                 ~ypad:settings_title_padding
+                 ~packing:(pack_tight pane)
+                 ~justify:`LEFT ~markup:"<b>About LibreRef</b>" ()));
+
+      ignore ((GMisc.label
+                 ~ypad:settings_title_padding
+                 ~packing:(pack_tight pane)
+                 ~line_wrap:true
+                 ~width:80
+                 ~justify:`LEFT
+                 ~markup:"LibreRef is a free as in freedom digital referencing tool for artists.
+    Copyright (C) 2021  Kiran Gopinathan
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see https://www.gnu.org/licenses/.
+
+The source code and LICENSE files for LibreRef can be found at:\n
+
+https://gitlab.com/gopiandcode/libre-ref/-/tree/master" ()));
+      pane in
+
+
+    (* https://gitlab.com/gopiandcode/libre-ref/-/tree/master *)
     window#show ();
     ()
 end
