@@ -40,7 +40,9 @@ let f = Web.get_sync
 module Logic : Gui.LOGIC = struct
 
   let clear_scene () = scene := Scene.init []
-        
+
+  let delete_selected_image () = scene := Scene.delete_active_image !scene
+
   let is_scene_dirty () = !scene.any_changes
 
   let add_raw_image_to_scene pos pixbuf =
@@ -107,7 +109,7 @@ module BuildUI (RuntimeCtx: Gui.RUNTIME_CONTEXT) (Dialog: Gui.DIALOG) : Gui.UI =
         scene := Scene.mouse_drag_pressed (x,y) !scene;
         queue_draw ()
       | 3 ->
-        Dialog.show_right_click_menu m
+        Dialog.show_right_click_menu ~can_delete:(Scene.can_delete !scene) m
       | _ -> ()
     end;
     false

@@ -68,7 +68,7 @@ end
 
 
 type state =
-  | ButtonPress of (float * float) * bool
+  | ButtonPress of (float * float)
   | MovingActive of  (float * float)
   | ScalingActive of [`NW | `NE | `SE | `SW ] * (float * float)
   | Normal
@@ -81,7 +81,7 @@ type t = {
   camera: Camera.t;
   filename: string option;
   any_changes: bool;
-  cache: Cache.t option;
+  mutable cache: Cache.t option;
 }
 
 let camera_focus t =
@@ -163,7 +163,7 @@ let mouse_select_pressed p scene =
       MovingActive (p), scene.images, scene.active, scene.cache
     | None, _, _ ->
       let images = scene.images @ Option.to_list scene.active in
-      Normal, images, None, Cache.init images
+      Normal, images, None, (if Option.is_some scene.active then None else scene.cache)
     | Some (selected, rest), _, _ ->
       let images = rest @ Option.to_list scene.active in
       Normal, images, Some selected, None in
@@ -172,11 +172,10 @@ let mouse_select_pressed p scene =
 
 
 let mouse_drag_pressed p scene =
-  let state = ButtonPress (p, false) in
+  let state = ButtonPress (p) in
   let scene = {scene with state} in
   scene
 
-let build_cache_if_empty cache images = match cache with None -> Cache.init images | _ -> cache
 
 let mouse_motion p scene =
   let update_camera (o_x,o_y) (x,y) =
@@ -187,19 +186,17 @@ let mouse_motion p scene =
     Option.map (Image.move_by dx dy) scene.active in
   let update_image_scale corner anchor p =
     Option.map (Image.scale_using_corner ~anchor ~corner p) scene.active in
-  let build_cache () = build_cache_if_empty scene.cache scene.images in
-  let camera, active, state, any_changes, cache = match scene.state with
+  let camera, active, state, any_changes = match scene.state with
     | MovingActive (op) ->
       let p = Camera.screen_to_world scene.camera (fst p) (snd p) in
-      scene.camera, update_image op p, MovingActive (p), true, build_cache ()
+      scene.camera, update_image op p, MovingActive (p), true
     | ScalingActive (cnr, anchor) ->
       let p = Camera.screen_to_world scene.camera (fst p) (snd p) in
-      scene.camera, update_image_scale cnr anchor p,
-      ScalingActive (cnr, anchor), true, build_cache ()
-    | ButtonPress (op, _) ->
-      update_camera op p, scene.active, ButtonPress (p, true), scene.any_changes, scene.cache
-    | Normal -> scene.camera, scene.active, Normal, scene.any_changes, scene.cache in
-  let scene = {scene with camera; state; active; any_changes; cache} in
+      scene.camera, update_image_scale cnr anchor p, ScalingActive (cnr, anchor), true
+    | ButtonPress (op) ->
+      update_camera op p, scene.active, ButtonPress (p), scene.any_changes
+    | Normal -> scene.camera, scene.active, Normal, scene.any_changes in
+  let scene = {scene with camera; state; active; any_changes} in
   scene
 
 let mouse_released scene =
@@ -207,12 +204,8 @@ let mouse_released scene =
     | MovingActive (_) -> scene.active, Normal, scene.images, scene.cache
     | ScalingActive (_, _) -> scene.active, Normal, scene.images, scene.cache
     | Normal as v -> scene.active, v, scene.images, scene.cache
-    | ButtonPress (_, any_motion) ->
-      match any_motion with
-      | false ->
-        let images = (scene.images @ Option.to_list scene.active) in
-        None, Normal, images, Cache.init images
-      | true -> scene.active, Normal, scene.images, scene.cache in
+    | ButtonPress (_) ->
+      scene.active, Normal, scene.images, scene.cache in
   let scene = {scene with state; images; active; cache} in
   scene
 
@@ -221,9 +214,13 @@ let draw scene cr  =
   Cairo.paint cr;
   Cairo.set_matrix cr (Camera.to_view_matrix scene.camera);
 
+  if Config.get_cache_drawing () then begin match scene.cache with
+    | None -> scene.cache <- Cache.init scene.images
+    | _ -> ()
+  end;
 
   begin match scene.cache with 
-    | None ->
+    | None  ->
       List.iter (Image.draw cr) (scene.images);
     | Some cache ->
       Cache.draw cache cr;
@@ -235,6 +232,12 @@ let zoom_around ~by (x,y)  scene =
   let camera = Camera.zoom_around x y by scene.camera in
   {scene with camera}
 
+let can_delete scene = Option.is_some scene.active
+
+let delete_active_image scene =
+  print_endline @@ Printf.sprintf "deleting selected image!";
+  {scene with active=None; cache=None; any_changes=true}
+
 let add_image_at (x,y) filename scene =
   let pos = Camera.screen_to_world scene.camera x y in
   let open Error in
@@ -242,7 +245,7 @@ let add_image_at (x,y) filename scene =
   let state, images, active =
     Normal, (scene.images @ Option.to_list scene.active),
     Some image in
-  Ok {scene with state; images; active; any_changes=true}
+  Ok {scene with state; images; active; any_changes=true; cache=None}
 
 let add_raw_image_at (x,y) pixbuf scene =
   let pos = Camera.screen_to_world scene.camera x y in
@@ -251,7 +254,7 @@ let add_raw_image_at (x,y) pixbuf scene =
   let state, images, active =
     Normal, (scene.images @ Option.to_list scene.active),
     Some image in
-  Ok {scene with state; images; active; any_changes=true}
+  Ok {scene with state; images; active; any_changes=true; cache=None}
 
 let add_images_at (x,y) filenames scene =
   let pos = Camera.screen_to_world scene.camera x y in
@@ -272,5 +275,5 @@ let add_images_at (x,y) filenames scene =
     let state, images, active =
       Normal, (scene.images @ Option.to_list scene.active @ rest),
       Some first in
-    {scene with state; images; active; any_changes=true}, errors
+    {scene with state; images; active; any_changes=true; cache=None}, errors
 

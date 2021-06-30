@@ -64,6 +64,7 @@ end
 
 module type LOGIC = sig
   val clear_scene: unit -> unit
+  val delete_selected_image: unit -> unit
   val is_scene_dirty: unit -> bool
   val current_scene_name: unit -> string option
   val get_title: unit -> string
@@ -76,7 +77,7 @@ end
 module type DIALOG = sig
   val handle_quit_application : unit -> unit
   val handle_paste_images_at: float * float -> unit -> unit
-  val show_right_click_menu : GdkEvent.Button.t -> unit
+  val show_right_click_menu : can_delete:bool -> GdkEvent.Button.t -> unit
   val show_errors : string list -> unit
 end
 
@@ -460,6 +461,10 @@ module BuildDialogs (RuntimeCTX : RUNTIME_CONTEXT)  (Logic: LOGIC) (Config: CONF
          queue_draw ();
          show_errors errors)
 
+  let handle_delete_image () =
+    Logic.delete_selected_image ();
+    queue_draw ()
+
   let handle_drop_images (x,y) files =
     let errors = Logic.add_files_to_scene (x,y) files in
     queue_draw ();
@@ -506,7 +511,7 @@ module BuildDialogs (RuntimeCTX : RUNTIME_CONTEXT)  (Logic: LOGIC) (Config: CONF
       ~do_save:handle_save_scene
 
 (* **** Right click *)
-  let show_right_click_menu button =
+  let show_right_click_menu ~can_delete button =
     let menu = GMenu.menu () in
 
     let load_image = GMenu.menu_item ~label:"Open image(s)" () in
@@ -534,6 +539,14 @@ module BuildDialogs (RuntimeCTX : RUNTIME_CONTEXT)  (Logic: LOGIC) (Config: CONF
     menu#add open_scene_w;
     ignore @@ open_scene_w#connect#activate
       ~callback:handle_load_scene;
+
+    if can_delete then begin
+      menu#add @@ GMenu.separator_item ();
+      let delete_image_w = GMenu.menu_item ~label:"Delete image" () in
+      menu#add delete_image_w;
+      ignore @@ delete_image_w#connect#activate
+        ~callback:handle_delete_image;
+    end;
 
     menu#add @@ GMenu.separator_item ();
 

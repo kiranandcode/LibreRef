@@ -93,6 +93,9 @@ module type LOGIC = sig
   (** [clear_scene ()] resets the application's stored scene to an empty scene   *)
   val clear_scene : unit -> unit
 
+  (** [delete_selected_image ()] deletes the currently selected image.  *)
+  val delete_selected_image: unit -> unit
+
   (** [is_scene_dirty ()] returns true if the application's stored scene has had changes  *)
   val is_scene_dirty : unit -> bool
 
@@ -140,9 +143,9 @@ module type DIALOG = sig
   (** [handle_paste_images_at (x,y) ()] pastes images at  *)
   val handle_paste_images_at : float * float -> unit -> unit
 
-  (** [show_right_click_menu button] pops up a menu at the position of
+  (** [show_right_click_menu ~can_delete button] pops up a menu at the position of
      the cursor *)
-  val show_right_click_menu : GdkEvent.Button.t -> unit
+  val show_right_click_menu : can_delete:bool -> GdkEvent.Button.t -> unit
 
   (** [show_errors errors] pops up a dialog box listing all errors *)
   val show_errors : string list -> unit
