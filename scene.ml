@@ -30,7 +30,7 @@ specific requirements.
 if any, to sign a "copyright disclaimer" for the program, if necessary.
 For more information on this, and how to apply and follow the GNU AGPL, see
 <https://www.gnu.org/licenses/>.
-*)
+c*)
 let set_source_rgbi cr (r,g,b) =
   Cairo.set_source_rgb cr (r) (g) (b)
 
@@ -56,6 +56,9 @@ type t = {
   filename: string option;
   any_changes: bool;
 }
+
+let camera_focus t =
+  Camera.get_center t.camera
 
 let generate_title =
   let rec last = function | [] -> "" | h :: [] -> h | _ :: t -> last t in
@@ -185,7 +188,8 @@ let zoom_around ~by (x,y)  scene =
   let camera = Camera.zoom_around x y by scene.camera in
   {scene with camera}
 
-let add_image_at pos filename scene =
+let add_image_at (x,y) filename scene =
+  let pos = Camera.screen_to_world scene.camera x y in
   let open Error in
   let+ image = Image.load_from_file ~at:pos filename in
   let state, active =
@@ -193,12 +197,27 @@ let add_image_at pos filename scene =
     Some image in
   Ok {scene with state; active; any_changes=true}
 
-let add_images_at pos filenames scene =
+let add_raw_image_at (x,y) pixbuf scene =
+  let pos = Camera.screen_to_world scene.camera x y in
+  let open Error in
+  let+ image = Image.load_from_pixbuf ~at:pos pixbuf in
+  let state, active =
+    Normal (state_elts scene.state @ Option.to_list scene.active),
+    Some image in
+  Ok {scene with state; active; any_changes=true}
+
+let add_images_at (x,y) filenames scene =
+  let pos = Camera.screen_to_world scene.camera x y in
   let _, images, errors = 
-    Error.fold_left_flat_map (fun pos filename ->
-        let open Error in
-        let+ image = Image.load_from_file ~at:pos filename in
-        Ok (Image.shift_point_left_of image pos, image)
+    Error.fold_left_flat_map (fun pos -> function
+        | `File filename ->
+          let open Error in
+          let+ image = Image.load_from_file ~at:pos filename in
+          Ok (Image.shift_point_left_of image pos, image)
+        | `Web url ->
+          let open Error in
+          let+ image = Image.load_from_url ~at:pos url in
+          Ok (Image.shift_point_left_of image pos, image)
       ) pos filenames in
   match images with
   | [] -> scene, errors

@@ -1,0 +1,143 @@
+* Tasks
+** DONE Draw image
+   CLOSED: [2021-04-24 Sat 17:19]
+** DONE Draw image scaled
+   CLOSED: [2021-04-24 Sat 17:39]
+** DONE Change scale matrix based on mouse scroll
+   CLOSED: [2021-04-25 Sun 17:33]
+** DONE Draw selected item on click
+   CLOSED: [2021-04-26 Mon 14:54]
+*** DONE Draw items with selected format
+    CLOSED: [2021-04-26 Mon 13:57]
+*** DONE On mouse press
+    CLOSED: [2021-04-26 Mon 14:54]
+**** if mouse on image, set image to selected,
+**** if mouse on no-image, set last mouse pos
+*** DONE On mouse release
+    CLOSED: [2021-04-26 Mon 14:54]
+**** if mouse on image, set image to active
+**** if mouse on no-image, 
+*** DONE On mouse motion
+    CLOSED: [2021-04-26 Mon 14:54]
+** DONE Move selected item on drag
+   CLOSED: [2021-04-26 Mon 18:18]
+*** DONE on mouse pressed, if mouse over active image, then set state to moving item
+    CLOSED: [2021-04-26 Mon 18:18]
+*** DONE if moving item, then on motion, move item by dx dy
+    CLOSED: [2021-04-26 Mon 18:18]
+** DONE Change scale based on drag and drop
+   CLOSED: [2021-04-26 Mon 18:18]
+** DONE add images via right click menu
+   CLOSED: [2021-04-27 Tue 16:14]
+*** DONE On right click open menu
+    CLOSED: [2021-04-27 Tue 11:28]
+*** DONE add load image option
+    CLOSED: [2021-04-27 Tue 11:28]
+*** DONE on click load image, open filepicker
+    CLOSED: [2021-04-27 Tue 13:13]
+*** DONE add image on click
+    CLOSED: [2021-04-27 Tue 15:57]
+*** DONE add images on click
+    CLOSED: [2021-04-27 Tue 16:14]
+**** DONE basic space out images to avoid collision
+     CLOSED: [2021-04-27 Tue 16:14]
+** DONE File storage format
+   CLOSED: [2021-04-27 Tue 19:04]
+*** DONE Lookup serialisation techniques for OCaml - something binary
+    CLOSED: [2021-04-27 Tue 19:04]
+*** DONE Write function to save scene to file
+    CLOSED: [2021-04-27 Tue 19:04]
+*** DONE Write function to load scene from file
+    CLOSED: [2021-04-27 Tue 19:04]
+*** DONE load scene from file
+    CLOSED: [2021-04-27 Tue 19:04]
+*** DONE embed image data directly
+    CLOSED: [2021-04-27 Tue 19:04]
+**** DONE Add attribute to image storing whether its an embed or linked
+     CLOSED: [2021-04-27 Tue 19:04]
+**** DONE Figure out how to embed data directly
+     CLOSED: [2021-04-27 Tue 19:04]
+** DONE Support more image formats
+   CLOSED: [2021-04-28 Wed 13:59]
+*** DONE Lookup OCaml library for reading images
+    CLOSED: [2021-04-27 Tue 19:21]
+**** stb_image seems like a good choice
+*** DONE Convert images to common format then encode
+    CLOSED: [2021-04-28 Wed 13:59]
+** DONE Add option to quit program
+   CLOSED: [2021-04-28 Wed 14:01]
+** DONE On loading file, ask whether to save changes
+   CLOSED: [2021-04-28 Wed 14:52]
+*** DONE add variable to scene to track changes
+    CLOSED: [2021-04-28 Wed 14:52]
+*** DONE on loading, check if variable changes
+    CLOSED: [2021-04-28 Wed 14:52]
+** DONE On saving file, as if overwriting existing file
+   CLOSED: [2021-04-28 Wed 14:52]
+** DONE Change title based on loaded scene
+   CLOSED: [2021-04-28 Wed 15:30]
+** DONE Change title based on edits
+   CLOSED: [2021-04-28 Wed 15:30]
+** DONE Add option to create new scene
+   CLOSED: [2021-04-28 Wed 16:28]
+** DONE Refactor system
+   CLOSED: [2021-04-28 Wed 19:06]
+*** DONE initialize git repo
+    CLOSED: [2021-04-28 Wed 16:54]
+** DONE Settings menu
+   CLOSED: [2021-04-29 Thu 18:10]
+*** DONE add option to right click menu
+    CLOSED: [2021-04-28 Wed 19:25]
+*** DONE Setup structure of settings menu
+    CLOSED: [2021-04-29 Thu 18:10]
+**** DONE Linking
+     CLOSED: [2021-04-29 Thu 09:38]
+***** DONE embed images by default
+      CLOSED: [2021-04-29 Thu 09:38]
+**** DONE Canvas
+     CLOSED: [2021-04-29 Thu 18:09]
+***** DONE Min scale
+      CLOSED: [2021-04-29 Thu 18:09]
+***** DONE Max scale
+      CLOSED: [2021-04-29 Thu 18:09]
+**** DONE Theme
+     CLOSED: [2021-04-29 Thu 18:09]
+***** DONE Background color
+      CLOSED: [2021-04-29 Thu 18:09]
+***** DONE Outline Color
+      CLOSED: [2021-04-29 Thu 18:09]
+**** DONE Config
+     CLOSED: [2021-04-29 Thu 18:10]
+***** DONE Config directory
+      CLOSED: [2021-04-29 Thu 18:10]
+*** DONE Add module for settings
+    CLOSED: [2021-04-29 Thu 18:10]
+*** DONE Support min and max zoom
+    CLOSED: [2021-04-29 Thu 19:00]
+*** DONE Load settings from file
+    CLOSED: [2021-04-29 Thu 20:21]
+** DONE Add splash screen - new, open, settings
+   CLOSED: [2021-05-03 Mon 16:47]
+** DONE Separators on right click menu
+   CLOSED: [2021-05-03 Mon 16:54]
+** DONE Support drag and drop
+   CLOSED: [2021-05-31 Mon 11:51]
+*** DONE on drag and drop, add image at position
+    CLOSED: [2021-05-31 Mon 11:51]
+** DONE Support C-c C-v pasting
+   CLOSED: [2021-06-01 Tue 13:23]
+** TODO Update keybindings
+*** Mouse/Right mouse click to select
+*** Middle/Space drag to move
+** TODO Scale on 
+** TODO Delete images via right click
+*** TODO right click changes active
+*** TODO if active, add options to right click menu
+** TODO Delete selected images on del
+** TODO Select multiple
+*** TODO right click and drag - selection
+*** TODO ctrl click - add to selection
+*** TODO click on image in selection - preserve selection
+*** TODO drag on image in selection - move all selected images
+** TODO Ask on overwrite
+

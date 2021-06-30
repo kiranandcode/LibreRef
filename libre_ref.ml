@@ -35,11 +35,18 @@ For more information on this, and how to apply and follow the GNU AGPL, see
 (* ** Resources *)
 let scene = ref @@ Scene.init []
 
+let f = Web.get_sync
+
 module Logic : Gui.LOGIC = struct
 
   let clear_scene () = scene := Scene.init []
         
   let is_scene_dirty () = !scene.any_changes
+
+  let add_raw_image_to_scene pos pixbuf =
+    match (Scene.add_raw_image_at pos pixbuf !scene) with
+    | Ok s' -> scene := s'; []
+    | Error error -> [error]
 
   let add_files_to_scene pos images =
     let s', errors = (Scene.add_images_at pos images !scene) in
@@ -82,12 +89,12 @@ module BuildUI (RuntimeCtx: Gui.RUNTIME_CONTEXT) (Dialog: Gui.DIALOG) : Gui.UI =
     let x = GdkEvent.Motion.x m and y = GdkEvent.Motion.y m in
     scene := Scene.mouse_motion (x,y) !scene;
     queue_draw ();
-    true 
+    false 
 
   let on_button_release = fun _m ->
     scene := Scene.mouse_released !scene;
     queue_draw ();
-    true 
+    false 
 
   let on_button_press = fun m ->
     let x = GdkEvent.Button.x m and y = GdkEvent.Button.y m in
@@ -99,7 +106,7 @@ module BuildUI (RuntimeCtx: Gui.RUNTIME_CONTEXT) (Dialog: Gui.DIALOG) : Gui.UI =
       | 3 -> Dialog.show_right_click_menu m
       | _ -> ()
     end;
-    true
+    false
 
   let on_scroll = fun m ->
     let x,y = GdkEvent.Scroll.x m, GdkEvent.Scroll.y m in
@@ -113,6 +120,18 @@ module BuildUI (RuntimeCtx: Gui.RUNTIME_CONTEXT) (Dialog: Gui.DIALOG) : Gui.UI =
       |`SMOOTH |`LEFT |`RIGHT -> ()
     end;
     true
+
+
+  let on_key_press (key: GdkEvent.Key.t) =
+    let keyval = GdkEvent.Key.keyval key 
+    and state = GdkEvent.Key.state key in
+    begin match keyval, state with
+      | keyval, [`CONTROL] when keyval = GdkKeysyms._v ->
+        let pos = Scene.camera_focus !scene in
+        Dialog.handle_paste_images_at pos ()
+    | _ -> ()
+    end;
+    false
 
 end
 
@@ -154,5 +173,4 @@ let () =
       ~man ~envs
       "libre-ref" in
   Term.exit @@ Term.eval @@ (main_command, libreref_info)
-
 

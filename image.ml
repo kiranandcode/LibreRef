@@ -131,15 +131,10 @@ let load_from_file ?at ?(scale=1.0) filename =
   let (let+) x f = Result.bind x f in
   let+ data =
     match () with
-    (* | () when is_suffix ~suffix:".png" filename  ->
-     *   Error.wrapping_exceptions (fun () -> Cairo.PNG.create filename)
-     * | () when is_suffix ~suffix:".ps" filename  ->
-     *   Error.wrapping_exceptions (fun () -> Cairo.PS.create filename ~w:100.0 ~h:100.0)
-     * | () when is_suffix ~suffix:".pdf" filename  ->
-     *   Error.wrapping_exceptions (fun () -> Cairo.PDF.create filename  ~w:100.0 ~h:100.0) *)
     | ()  ->
       begin match Stb_image.load filename with
         | Ok image ->
+          print_endline @@ Printf.sprintf "Got image (wxh=%dx%d,channels=%d,offset=%d,stride=%d(%d*%d))\n"  image.width image.height image.channels image.offset image.stride image.width (image.stride/image.width);
           Error.wrapping_exceptions (fun () ->
               Utils.stb_buffer_to_cairo_surface image
             )
@@ -155,6 +150,40 @@ let load_from_file ?at ?(scale=1.0) filename =
       if !Config.embed_images then `Embedded else `File filename
     )})
 
+let load_from_url ?at ?(scale=1.0) url =
+  let (let+) x f = Result.bind x f in
+  let+ raw_image = Web.get_sync url |> Result.map_error Piaf.Error.to_string in
+  let+ image = Utils.string_to_stb_image raw_image |> Result.map_error (function `Msg v -> v) in
+  let+ data = Error.wrapping_exceptions (fun () ->
+              Utils.stb_buffer_to_cairo_surface image
+            ) in
+  let position = match at with Some v -> v | None -> (0., 0.) in
+  let width,height = Float.of_int @@ Cairo.Image.get_width data,
+                     Float.of_int @@ Cairo.Image.get_height data in
+  Ok (Image {data; position; scale; width; height; file_ref=( `Embedded )})
+
+let load_from_pixbuf ?at ?(scale=1.0) pixbuf =
+  let (let+) x f = Result.bind x f in
+  let+ data =
+    match () with
+    | ()  ->
+      begin match   Utils.pixbuf_to_stb_image pixbuf with
+        | Ok image ->
+          print_endline @@ Printf.sprintf "Got image (wxh=%dx%d,channels=%d,offset=%d,stride=%d(%d*%d))\n"  image.width image.height image.channels image.offset image.stride image.width (image.stride/image.width);
+          Error.wrapping_exceptions (fun () ->
+              Utils.stb_buffer_to_cairo_surface image
+            )
+        | Error `Msg error ->
+          Error error
+      end
+      (* Error.wrapping_exceptions (fun () -> Cairo.PNG.create filename) *)
+      (* | _ -> Error (Printf.sprintf "Unsupported image type %s" filename) *) in
+  let position = match at with Some v -> v | None -> (0., 0.) in
+  let width,height = Float.of_int @@ Cairo.Image.get_width data,
+                     Float.of_int @@ Cairo.Image.get_height data in
+  Ok (Image {data; position; scale; width; height; file_ref=( `Embedded )})
+
+
 let load_from_data ?at ?(scale=1.0) data w h alpha =
   let data = Cairo.Image.create_for_data32 ~w ~h ~alpha data in
   let position = match at with Some v -> v | None -> (0., 0.) in
@@ -167,7 +196,8 @@ let from_serialized (serialised: Serialized.Image.t) =
   | Serialized.Image.Linked file ->
     load_from_file ~at:serialised.position ~scale:serialised.scale file
   | Serialized.Image.Embedded { data; w; h; alpha } -> 
-    Error.wrapping_exceptions (fun () -> load_from_data data w h alpha)
+    Error.wrapping_exceptions (fun () ->
+        load_from_data ~at:serialised.position ~scale:serialised.scale data w h alpha)
 
 let to_serialized = function
   | Image {data; position; scale; file_ref=`Embedded; _} ->

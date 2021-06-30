@@ -32,39 +32,21 @@ For more information on this, and how to apply and follow the GNU AGPL, see
 <https://www.gnu.org/licenses/>.
 *)
 
-type t = { c_x: float; c_y: float; zoom: float; }
 
-let create () = { c_x = 0.; c_y = 0.; zoom = 1. }
+open Piaf
 
-let to_view_matrix {c_x; c_y; zoom} =
-  let matrix = Cairo.Matrix.init_translate (-.c_x) (-.c_y) in
-  Cairo.Matrix.scale matrix zoom zoom;
-  matrix
 
-let move_by dx dy {c_x; c_y; zoom} : t = {c_x=c_x +. dx; c_y = c_y +. dy; zoom}
+let get_sync url =
+  let open Lwt_result.Syntax in
 
-let screen_to_world {c_x;c_y; zoom} x y =
-  let x_c, y_c = (x  +. c_x) /. zoom,  (y +. c_y) /. zoom in
-  x_c, y_c
+  Lwt_main.run begin
+    print_endline "Sending request...";
 
-let zoom_around x y by ({c_x; c_y; zoom} as prev) : t =
-  let x_w, y_w = screen_to_world {c_x; c_y; zoom} x y in
-  let new_zoom = zoom +. by in
-  let new_zoom = if new_zoom <= !Config.min_zoom
-    then !Config.min_zoom
-    else if new_zoom >= !Config.max_zoom
-    then !Config.max_zoom
-    else new_zoom in
-  if new_zoom <> zoom then
-    let c_x = c_x +. x_w *. by
-    and c_y = c_y +. y_w *. by in
-    {c_x; c_y; zoom=new_zoom}
-  else prev
+    let* response = Client.Oneshot.get (Uri.of_string url) in
 
-let from_serialized (camera: Serialized.Camera.t) =
-  {c_x = camera.c_x; c_y=camera.c_y; zoom=camera.zoom}
-
-let to_serialized (camera: t) : Serialized.Camera.t =
-  Serialized.Camera.{c_x = camera.c_x; c_y=camera.c_y; zoom=camera.zoom}
-
-let get_center (camera: t) = camera.c_x, camera.c_y
+    if (Status.is_successful response.status) then
+      Body.to_string response.body
+    else
+      let message = Status.to_string response.status in
+      Lwt.return (Error (`Msg message))
+  end

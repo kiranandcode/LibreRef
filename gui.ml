@@ -64,13 +64,15 @@ module type LOGIC = sig
   val is_scene_dirty: unit -> bool
   val current_scene_name: unit -> string option
   val get_title: unit -> string
-  val add_files_to_scene: float * float -> string list -> string list
+  val add_raw_image_to_scene: float * float -> GdkPixbuf.pixbuf -> string list
+  val add_files_to_scene: float * float -> [`File of string | `Web of string ] list -> string list
   val open_scene_from_file: string -> string list
   val save_scene_as: string -> string list
 end  
 
 module type DIALOG = sig
   val handle_quit_application : unit -> unit
+  val handle_paste_images_at: float * float -> unit -> unit
   val show_right_click_menu : GdkEvent.Button.t -> unit
   val show_errors : string list -> unit
 end
@@ -81,12 +83,22 @@ module type UI = sig
   val on_button_release: GdkEvent.Button.t -> bool
   val on_button_press: GdkEvent.Button.t -> bool
   val on_scroll: GdkEvent.Scroll.t -> bool
+  val on_key_press: GdkEvent.Key.t -> bool
 end
 (* ** Constants *)
 let settings_title_padding = 10
 let settings_option_label_width = 200
 let settings_option_label_padding = 10
 let settings_option_value_padding = 20
+let supported_mime_types = [|
+  "text/plain";
+  "text/uri-list";
+  "image/jpeg";
+  "image/bmp";
+  "image/gif";
+  "image/tiff";
+  "image/png";
+|]
 
 (* ** Implementations *)
 (* *** Utils *)
@@ -429,9 +441,42 @@ module BuildDialogs (RuntimeCTX : RUNTIME_CONTEXT)  (Logic: LOGIC) (Config: CONF
          queue_draw ();
          show_errors errors)
 
+  let handle_drop_images (x,y) files =
+    let errors = Logic.add_files_to_scene (x,y) files in
+    queue_draw ();
+    show_errors errors
+
+  let clipboard_has_data () =
+    match GMain.clipboard#image, GMain.clipboard#text with
+    | None, None -> false
+    | _ -> true
+
+  let handle_paste_images_at (x,y) () =
+    match GMain.clipboard#image, GMain.clipboard#text with
+    | Some pixbuf, _ ->
+      let errors = Logic.add_raw_image_to_scene (x,y) pixbuf in
+      queue_draw ();
+      show_errors errors
+    | None, Some data ->
+      let errors = Logic.add_files_to_scene (x,y)
+          (String.split_on_char '\n' data
+           |> List.map (fun str ->
+               let str = String.trim str in
+               if Filter.is_prefix "http://" str || Filter.is_prefix "https://" str
+               then `Web str
+               else `File str)) in
+      queue_draw ();
+      show_errors errors
+    | _ -> ()
+
+  let handle_paste_images button () =
+    let x,y = GdkEvent.Button.x button, GdkEvent.Button.y button in
+    handle_paste_images_at (x,y) ()
+
   let handle_load_images button () =
     let x,y = GdkEvent.Button.x button, GdkEvent.Button.y button in
     handle_load_images ~then_:(fun files ->
+        let files = List.map (fun v -> `File v) files in
         let errors = Logic.add_files_to_scene (x,y) files in
         queue_draw ();
         show_errors errors)
@@ -441,11 +486,9 @@ module BuildDialogs (RuntimeCTX : RUNTIME_CONTEXT)  (Logic: LOGIC) (Config: CONF
       ~any_changes:Logic.is_scene_dirty
       ~do_save:handle_save_scene
 
-
 (* **** Right click *)
   let show_right_click_menu button =
     let menu = GMenu.menu () in
-
 
     let load_image = GMenu.menu_item ~label:"Open image(s)" () in
     menu#add load_image;
@@ -473,11 +516,21 @@ module BuildDialogs (RuntimeCTX : RUNTIME_CONTEXT)  (Logic: LOGIC) (Config: CONF
     ignore @@ open_scene_w#connect#activate
       ~callback:handle_load_scene;
 
+    menu#add @@ GMenu.separator_item ();
+
+    let paste_w = GMenu.menu_item ~label:"Paste image" () in
+    menu#add paste_w;
+    ignore @@ paste_w#connect#activate
+      ~callback:(handle_paste_images button);
+
+    paste_w#set_sensitive (clipboard_has_data ());
 
     menu#add @@ GMenu.separator_item ();
 
     let settings = GMenu.menu_item ~label:"Configure LibreRef" () in
+
     menu#add settings;
+
     ignore @@ settings#connect#activate
       ~callback:(SettingsPanel.handle_settings ~queue_draw);
 
@@ -486,7 +539,6 @@ module BuildDialogs (RuntimeCTX : RUNTIME_CONTEXT)  (Logic: LOGIC) (Config: CONF
     ignore @@ quit_application#connect#activate
       ~callback:handle_quit_application;
 
-
     let button = GdkEvent.Button.button button and time = GdkEvent.Button.time button in
     menu#popup ~button ~time
 
@@ -494,8 +546,6 @@ module BuildDialogs (RuntimeCTX : RUNTIME_CONTEXT)  (Logic: LOGIC) (Config: CONF
 end
 
 (* *** Main UI  *)
-module M = GdkPixbuf
-
 let logo =
   let data = [%blob "./resources/libre-ref-logo.png"] |> Bytes.of_string in
   let data = Bigarray.(Array1.init int8_unsigned c_layout
@@ -551,8 +601,6 @@ struct
         ~width:300 ~height:300
         ~icon:icon ~kind:`TOPLEVEL ~resizable:true ~title:"Libre-ref" () in
     let d = GMisc.drawing_area ~packing:w#add () in
-
-
 
     let module RuntimeCTX = struct
       let w = w
@@ -611,19 +659,40 @@ struct
 
     let build_and_show_main_window () =
       w#set_title "Libre ref";
-      w#event#add [ `SCROLL ; `BUTTON1_MOTION; `BUTTON3_MOTION; `BUTTON_PRESS ; `BUTTON_RELEASE  ];
+      w#event#add [
+        `SCROLL ; `BUTTON1_MOTION; `BUTTON3_MOTION;
+        `BUTTON_PRESS ; `BUTTON_RELEASE; `KEY_PRESS
+      ];
 
 
+      (* TODO: Set copy or link based on preferences  *)
+      w#drag#dest_set ~actions:[`COPY;] ~flags:[`ALL(* ; `DROP; `HIGHLIGHT; `MOTION *)]
+        (Array.to_list @@ Array.map
+                    (fun target -> Gtk.{target;flags=[]; info=1})
+                    supported_mime_types);
+
+      (* drag and drop *)
+      ignore @@ w#drag#connect#data_received ~callback:(fun _ctx ~x ~y sc ~info:_ ~time:_ ->
+          let files = String.split_on_char '\n' sc#data |> List.filter_map (fun str ->
+              let str = String.trim str in
+              if Filter.is_prefix "file://" str
+              then Some (`File (Stringext.drop str 7))
+              else if Filter.is_prefix "http://" str ||  Filter.is_prefix "https://" str
+              then Some (`Web str)
+              else None
+            ) in
+          Dialogs.handle_drop_images (Float.of_int x, Float.of_int y) files
+        );
+      
       ignore @@ d#misc#connect#draw ~callback:(UI.expose);
-
+      ignore @@ w#event#connect#key_press ~callback:(UI.on_key_press);
       ignore @@ w#event#connect#motion_notify ~callback:UI.on_move;
       ignore @@ w#event#connect#button_release ~callback:UI.on_button_release;
       ignore @@ w#event#connect#button_press ~callback:UI.on_button_press;
       ignore @@ w#event#connect#scroll ~callback:UI.on_scroll;
-      ignore(w#connect#destroy ~callback:Dialogs.handle_quit_application);
+      ignore @@ w#connect#destroy ~callback:Dialogs.handle_quit_application;
 
       w#show () in
-
 
 
     (* Finally, load initial scene *)

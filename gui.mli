@@ -98,12 +98,19 @@ module type LOGIC = sig
   (** [get_title ()] returns the title corresponding to the current application state *)
   val get_title: unit -> string
 
+  (** [add_raw_image_to_scene (x,y) files] loads an image from raw
+     data and inserts the image at position (x,y) and returns the list
+     of errors encountered while loading the images.
+
+      Note: (x,y) are in screen coordinates not world coordinates.  *)
+  val add_raw_image_to_scene: float * float -> GdkPixbuf.pixbuf -> string list
+
   (** [add_files_to_scene (x,y) files] loads each file in files and
      inserts the image at position (x,y) and returns the list of
      errors encountered while loading the images.
 
       Note: (x,y) are in screen coordinates not world coordinates.  *)
-  val add_files_to_scene : float * float -> string list -> string list
+  val add_files_to_scene: float * float -> [`File of string | `Web of string ] list -> string list
 
   (** [open_scene_from_file filename] updates the application's stored
      scene to the scene contained in the file at filename, returning
@@ -123,6 +130,9 @@ module type DIALOG = sig
      unsaved changes to the current scene, then it asks the user
      whether these changes should be saved *)
   val handle_quit_application : unit -> unit
+
+  (** [handle_paste_images_at (x,y) ()] pastes images at  *)
+  val handle_paste_images_at : float * float -> unit -> unit
 
   (** [show_right_click_menu button] pops up a menu at the position of
      the cursor *)
@@ -148,6 +158,9 @@ module type UI = sig
 
   (** Handle scroll events. *)
   val on_scroll : GdkEvent.Scroll.t -> bool
+
+  (** Handle key press  *)
+  val on_key_press: GdkEvent.Key.t -> bool
 end
 
 module Make : functor
