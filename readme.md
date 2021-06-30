@@ -15,6 +15,10 @@ Usage:
 
 # Download
 
+LibreRef is distributed as an AppImage for easy use: 
+
+ - X86_64: [libre-ref-x86_64](https://github.com/Gopiandcode/LibreRef/releases/download/v1.0.0-GH/libre-ref-x86_64.AppImage)
+
 # Screenshots
 
 <img src="https://raw.githubusercontent.com/Gopiandcode/LibreRef/master/images/splash.png" width="30%" height="30%">
